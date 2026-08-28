@@ -16,12 +16,27 @@ class MatchEventsScreen extends ConsumerWidget {
     final canAddGoal = managerState.valueOrNull?.dataAccessReady ?? false;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Local-First Match Tracker')),
-      body: Padding(
+      appBar: AppBar(
+        title: const Text('Local-First Match Tracker'),
+        actions: const [_ThemeModeButton()],
+      ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Theme.of(context).colorScheme.primary.withValues(alpha: 0.18),
+              Theme.of(context).scaffoldBackgroundColor,
+            ],
+          ),
+        ),
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            _MatchHero(eventsState: eventsState),
+            const SizedBox(height: 16),
             _DittoStatusCard(
               managerState: managerState,
               presenceState: presenceState,
@@ -60,6 +75,115 @@ class MatchEventsScreen extends ConsumerWidget {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Could not add goal: $error')));
     }
+  }
+}
+
+class _ThemeModeButton extends ConsumerWidget {
+  const _ThemeModeButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(themeModeProvider);
+    final nextMode = switch (mode) {
+      ThemeMode.system => ThemeMode.light,
+      ThemeMode.light => ThemeMode.dark,
+      ThemeMode.dark => ThemeMode.system,
+    };
+    final icon = switch (mode) {
+      ThemeMode.system => Icons.brightness_auto,
+      ThemeMode.light => Icons.light_mode,
+      ThemeMode.dark => Icons.dark_mode,
+    };
+
+    return IconButton(
+      tooltip: 'Change theme',
+      onPressed: () {
+        ref.read(themeModeProvider.notifier).state = nextMode;
+      },
+      icon: Icon(icon),
+    );
+  }
+}
+
+class _MatchHero extends StatelessWidget {
+  const _MatchHero({required this.eventsState});
+
+  final AsyncValue<List<MatchEvent>> eventsState;
+
+  @override
+  Widget build(BuildContext context) {
+    final events = eventsState.valueOrNull ?? const <MatchEvent>[];
+    final greenGoals = events
+        .where(
+          (event) =>
+              event.type == MatchEventType.goal && event.teamName == 'Green FC',
+        )
+        .length;
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Theme.of(context).colorScheme.primary,
+              Theme.of(context).colorScheme.secondary,
+            ],
+          ),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Icon(
+                    Icons.sports_soccer,
+                    color: Colors.white,
+                    size: 32,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  'LIVE DEMO',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Green FC',
+              style: Theme.of(context).textTheme.headlineSmall
+                  ?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '$greenGoals - 0',
+              style: Theme.of(context).textTheme.displaySmall
+                  ?.copyWith(color: Colors.white, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Score is derived from synced goal events.',
+              style: Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(color: Colors.white.withValues(alpha: 0.86)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -118,8 +242,27 @@ class _EventList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (events.isEmpty) {
-      return const Center(
-        child: Text('No events yet. Tap “Add test goal” to create one.'),
+      return Card(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.stadium,
+                  size: 48,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'No events yet. Tap “Add test goal” to kick things off.',
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
@@ -128,10 +271,18 @@ class _EventList extends StatelessWidget {
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, index) {
         final event = events[index];
-        return ListTile(
-          leading: const Icon(Icons.sports_soccer),
-          title: Text('${event.label} — ${event.teamName}'),
-          subtitle: Text('Minute ${event.minute} • ${event.id}'),
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+              child: const Icon(Icons.sports_soccer),
+            ),
+            title: Text('${event.label} — ${event.teamName}'),
+            subtitle: Text('Minute ${event.minute} • ${event.id}'),
+            trailing: const Icon(Icons.chevron_right),
+          ),
         );
       },
     );

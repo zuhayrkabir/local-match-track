@@ -1,9 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/material.dart';
 
 import '../ditto/ditto_manager.dart';
 import '../domain/match_event.dart';
 import '../repositories/ditto/ditto_match_event_repository.dart';
 import '../repositories/match_event_repository.dart';
+
+final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
 
 final dittoManagerProvider = FutureProvider<DittoManager>((ref) async {
   final manager = DittoManager();
