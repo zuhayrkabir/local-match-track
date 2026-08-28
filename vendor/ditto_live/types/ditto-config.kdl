@@ -1,0 +1,185 @@
+meta {
+  version "0.1.14"
+}
+
+defaults {
+  union {
+    annotations r#"
+      @immutable
+      @external
+    "#
+
+    builder-annotations r#"
+      @external
+    "#
+  }
+  class {
+    annotations r#"
+      @immutable
+      @external
+    "#
+
+    builder-annotations r#"
+      @external
+    "#
+  }
+  field {
+    json-key-case "snake"
+  }
+}
+
+preamble r#"
+  // ignore_for_file: avoid_bool_literals_in_conditional_expressions, ditto_missing_visibility, require_trailing_commas, cast_nullable_to_non_nullable, annotate_overrides
+  // WARNING: DO NOT EDIT - generated from `types/transort-config.kdl`
+  import "package:meta/meta.dart";
+  import "analysis/annotations.dart";
+
+  import "auth.dart";
+  import "ditto.dart";
+  import "logger.dart";
+  import "sync.dart";
+"#
+
+class "DittoConfig" {
+  docs r#"
+A configuration object for initializing a [Ditto] instance.
+
+[DittoConfig] encapsulates all the parameters required to configure a Ditto
+instance, including identity, connectivity, persistence, and experimental
+features.
+  "#;
+
+  field "databaseID" type="String?" {
+    defaults-to "00000000-0000-0000-0000-000000000000"
+    docs r#"
+The unique identifier for the Ditto database.
+
+This must be a valid UUID string. You can find the database ID in the Ditto
+portal, or provide your own if you only need to sync with a small peers only.
+
+- Note: "Database ID" was previously referred to as "App ID" in older versions
+of the SDK.
+    "#;
+  }
+
+  field "connect" type="DittoConfigConnect" {
+    defaults-to-dart "const DittoConfigConnectSmallPeersOnly()"
+    docs r#"
+The connectivity configuration for this Ditto instance.
+
+Specifies how this instance discovers and connects to peers, including network
+settings and authentication options.
+    "#;
+  }
+
+  field "persistenceDirectory" type="String?" {
+    json-key "persistence_directory"
+    defaults-to null
+    docs r#"
+The persistence directory used by Ditto to persist data.
+
+When a relative path is provided, it will be resolved relative to the
+application documents directory (i.e. the return value of `await
+getApplicationDocumentsDirectory()` from `package:path_provider`).
+
+When `null` is provided, Ditto will use a default directory name of
+`ditto-{database-id}` within the [Ditto/defaultRootDirectory] where
+`{database-id}` corresponds to the lowercase version of the [databaseID] passed
+alongside the [DittoConfig].
+
+To access the final resolved absolute path after creating a Ditto instance, use
+[Ditto.absolutePersistenceDirectory]. This property will always return the
+effective absolute file path being used, regardless of whether you provided an
+absolute path, relative path, or `null`.
+
+Note: "Database ID" was previously referred to as "App ID" in older versions
+of the SDK.
+
+Note: It is not recommended to directly read from or write to this directory,
+as its structure and contents are managed by Ditto and may change in future
+versions.
+
+Note: When [DittoLogger] is enabled, logs may be written to this directory
+even after a Ditto instance has been deallocated. Please refer to the
+documentation of [DittoLogger] for more information.
+
+See also:
+- [Ditto.absolutePersistenceDirectory]
+- [Ditto.defaultRootDirectory]
+    "#;
+  }
+  field "experimental" type="DittoConfigExperimental" {
+    defaults-to-dart "const DittoConfigExperimental()"
+    docs r#"
+Configuration for experimental features.
+
+This property allows you to enable or configure features that are not yet part
+of the stable API. Use with caution, as experimental features may change or be
+removed in future releases.
+
+Warning: Experimental functionality should not be used in production
+applications as it may be changed or removed at any time, and may not have the
+same security features.
+    "#;
+  }
+}
+
+union "DittoConfigConnect" {
+  docs r#"
+Specifies how this instance discovers and connects to peers, including network
+settings and authentication options. This is a substructure of [DittoConfig].
+  "#;
+
+  class "DittoConfigConnectServer" {
+    json-discriminant-value "server"
+
+    docs r#"
+Connects this Ditto instance to a Big Peer at the specified URL.
+
+Important: For sync to work with server connections, Ditto requires both: - an
+[AuthenticationExpirationHandler] to be set via
+[Authenticator.expirationHandler] - that handler to properly authenticate when
+requested. [Sync.start] will throw if the expiration handler is `null`.
+    "#;
+
+    field "url" type="String"
+  }
+
+  class "DittoConfigConnectSmallPeersOnly" {
+    json-discriminant-value "small_peers_only"
+
+    field "privateKey" type="String?" {
+      defaults-to null;
+      docs r#"
+Restricts connectivity to small peers only, optionally using a shared secret
+(in the form of a private key) for authentication.
+
+If a [privateKey] is provided, it will be used as a shared secret for
+authenticating peer-to-peer connections. The default value is `null`, which
+means no encryption is used in transit.
+      "#;
+    }
+  }
+}
+
+class "DittoConfigExperimental" {
+  docs r#"
+Experimental configuration options for [DittoConfig].
+
+This class allows you to enable or configure features that are not yet part of
+the stable API. Use with caution, as experimental features may change or be
+removed in future releases.
+
+Warning: Experimental functionality should not be used in production
+applications as it may be changed or removed at any time, and may not have the
+same security features.
+  "#;
+
+  field "passphrase" type="String?" {
+    defaults-to null;
+    docs r#"
+The passphrase used to encrypt & decrypt the data of a Ditto instance, if
+provided.  This feature is undocumented and for internal use only.
+    "#;
+  }
+}

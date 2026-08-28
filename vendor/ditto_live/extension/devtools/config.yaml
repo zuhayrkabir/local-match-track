@@ -1,0 +1,5 @@
+name: ditto_live
+issueTracker: 'https://ditto.com'
+version: 4.10.3
+materialIconCodePoint: '0xe0b1'
+requiresConnection: true #

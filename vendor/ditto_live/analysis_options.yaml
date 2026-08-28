@@ -1,0 +1,93 @@
+include: package:very_good_analysis/analysis_options.yaml
+
+# Avoid `dynamic` where possible. `Object?` is a much better type in most cases
+#
+# The main exception is that JSON values should be represented as `dynamic` and
+# JSON *objects* should be `Map<String, dynamic>`. This is because it's idiomatic
+# and would be confusing/annoying to have `Map<String, Object?>`, since the rest
+# of the Dart ecosystem is built around `dynamic`.
+#
+# The reasoning behind this is that `dynamic` is, at the type level, an omnipotent
+# type - it presents itself as having every possible setter, getter, etc. By
+# contrast, `Object?` is the opposite - it can do nothing until you check the runtime
+# type.
+#
+# This is the behaviour we want. We want our type system to allow things that are known
+# to be safe as much as possible, rather than allowing literally everything.
+#
+#
+
+analyzer:
+  plugins:
+    - custom_lint
+  exclude:
+    - '**/*.g.dart' # don't lint generated files
+  language:
+    # forbid automatically casting `dynamic` to a more specific type
+    strict-casts: true
+
+    # prevents the typechecker from automatically inferring `dynamic` from context
+    strict-inference: true
+
+    # prevents "forgetting type arguments" - e.g. `List x = ...`
+    strict-raw-types: true
+
+# I don't like enabling annoying lints that don't have automated fixes
+#
+# `dart fix` is powerful, but doesn't cover everything.
+linter:
+  rules:
+    # The reasoning for this lint mostly only applies in Flutter UI code
+    # Widgets will avoid some rebuilds if they compare equal
+    # Widgets have a warning that prevents overriding `==`, but const acts as a workaround
+    # Any two const objects that are stored in the same place in the binary will have the same address, and therefore will compare equal, for example:
+    # `Text("hello") == Text("hello")` - false
+    # `const Text("hello") == const Text("hello")` - true
+    #
+    # Adding `const` can change semantics of a program, it's not just a performance bump
+    # Attempts to modify a const collection will fail *at runtime*
+    prefer_const_constructors: false
+
+    # Not every todo needs a person assigned
+    flutter_style_todos: false
+
+    # I don't care about anything which is just "order things in XYZ way"
+    #
+    # If merge conflicts become a huge issue, maybe we consider enabling this, but we're not at that scale yet
+    combinators_ordering: false # ordering show/hide declarations
+    sort_constructors_first: false
+    sort_pub_dependencies: false
+    directives_ordering: false
+    always_put_required_named_parameters_first: false
+    sort_unnamed_constructors_first: false
+
+    # dartfmt doesn't fix it, so I don't feel great about enforcing it
+    lines_longer_than_80_chars: false
+
+    # Neither of these is "better", I just prefer double quotes :)
+    prefer_single_quotes: false
+    prefer_double_quotes: true
+
+    # Dart's privacy model isn't sophisticated enough to understand our codebase,
+    # so this one is a mountain of false positives
+    public_member_api_docs: false
+
+    # this one is buggy
+    eol_at_end_of_file: false
+
+    # local typedefs can be nice for easing formatting/cognitive complexity
+    avoid_private_typedef_functions: false
+
+    # `import 'foo.dart'` rather than `import 'package:ditto_live/.../foo.dart'`
+    # I prefer this style because it makes internal reshuffling a bit less conflict-y
+    always_use_package_imports: false
+    prefer_relative_imports: true
+
+    prefer_asserts_with_message: false
+
+    # This disallows having an abstract class with a single abstract function.
+    # It's mainly a precaution against people familiar with Java assuming
+    # everything has to be a class.
+    #
+    # But sometimes you do actually want this.
+    one_member_abstracts: false
