@@ -19,6 +19,7 @@ class DittoManager {
   );
 
   Ditto? _ditto;
+  SyncSubscription? _matchesSubscription;
   SyncSubscription? _matchEventsSubscription;
   PresenceObserver? _presenceObserver;
   bool _dataAccessReady = false;
@@ -89,6 +90,9 @@ class DittoManager {
 
     await openedDitto.store.execute('ALTER SYSTEM SET DQL_STRICT_MODE = false');
 
+    _matchesSubscription = openedDitto.sync.registerSubscription(
+      'SELECT * FROM matches',
+    );
     _matchEventsSubscription = openedDitto.sync.registerSubscription(
       'SELECT * FROM match_events',
     );
@@ -124,6 +128,8 @@ class DittoManager {
   Future<void> close() async {
     _presenceObserver?.stop();
     _presenceObserver = null;
+    _matchesSubscription?.cancel();
+    _matchesSubscription = null;
     _matchEventsSubscription?.cancel();
     _matchEventsSubscription = null;
 

@@ -41,9 +41,12 @@ If a newer Ditto Flutter package fixes this upstream, remove the local path depe
 ditto_live: 5.1.0
 ```
 
-## Current feature
+## Current features
 
 See [Feature 01: Log Match Event](docs/feature-01-log-match-event.md).
+See [Feature 02: Main Referee Match Control](docs/feature-02-main-referee-match-control.md).
+See [Feature 03: Match Sessions](docs/feature-03-match-sessions.md).
+See [Feature 04: Roles, Rosters, and Substitutions](docs/feature-04-roles-rosters-substitutions.md).
 
 ## Run it
 
@@ -51,6 +54,21 @@ See [Feature 01: Log Match Event](docs/feature-01-log-match-event.md).
 flutter pub get
 flutter run
 ```
+
+For a clean Android run on a specific device:
+
+```bash
+flutter clean
+flutter pub get
+flutter devices
+flutter run -d your-device-id \
+  --dart-define=DITTO_DATABASE_ID=your-database-id \
+  --dart-define=DITTO_SERVER_URL=https://your-server-url \
+  --dart-define=DITTO_PLAYGROUND_TOKEN=your-development-token
+```
+
+Use the same Ditto database ID, server URL, and token on every phone/tablet you
+want in the same mesh test.
 
 If you run without any Ditto activation values, the app will render but syncing/data writes will be disabled. That is expected: Ditto still needs either an offline license token for Small Peers Only mode or server/playground credentials for server mode.
 
