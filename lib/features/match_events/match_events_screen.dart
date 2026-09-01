@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../../design/match_center_tokens.dart';
 import '../../domain/app_role.dart';
 import '../../domain/match_control.dart';
-import '../../domain/match_dashboard_summary.dart';
 import '../../domain/match_event.dart';
 import '../../domain/player.dart';
 import '../../ditto/ditto_manager.dart';
+import '../ditto_tools/ditto_tools_entry.dart';
+import '../match_dashboard/match_dashboard_view.dart';
 
 class MatchEventsScreen extends ConsumerStatefulWidget {
   const MatchEventsScreen({super.key});
@@ -46,11 +48,16 @@ class _MatchEventsScreenState extends ConsumerState<MatchEventsScreen> {
       );
     }
 
+    final compactAppBar = MediaQuery.sizeOf(context).width < 520;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Local-First Match Tracker'),
+        title: Text(
+          compactAppBar ? 'Match Tracker' : 'Local-First Match Tracker',
+        ),
         actions: [
-          _RoleBadge(role: selectedRole),
+          _RoleBadge(role: selectedRole, compact: compactAppBar),
+          DittoToolsIconButton(manager: managerState.valueOrNull),
           IconButton(
             tooltip: 'Change role',
             onPressed: () {
@@ -82,16 +89,12 @@ class _MatchEventsScreenState extends ConsumerState<MatchEventsScreen> {
               },
             ),
             const SizedBox(height: 16),
-            _DittoStatusCard(
-              managerState: managerState,
-              presenceState: presenceState,
-            ),
-            const SizedBox(height: 16),
             if (showDashboard)
-              _DashboardView(
+              MatchDashboardView(
                 canWrite: canWrite,
                 matchesState: matchesState,
                 allEventsState: allEventsState,
+                presenceState: presenceState,
                 selectedMatchId: ref.watch(selectedMatchIdProvider),
                 onMatchSelected: (matchId) {
                   ref.read(selectedMatchIdProvider.notifier).state = matchId;
@@ -100,6 +103,11 @@ class _MatchEventsScreenState extends ConsumerState<MatchEventsScreen> {
                 onCreateMatch: _createMatch,
               )
             else ...[
+              _DittoStatusCard(
+                managerState: managerState,
+                presenceState: presenceState,
+              ),
+              const SizedBox(height: 16),
               _MatchHero(
                 eventsState: eventsState,
                 matchControlState: matchControlState,
@@ -323,41 +331,65 @@ class _RoleSelectionScreen extends StatelessWidget {
         actions: const [_ThemeModeButton()],
       ),
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Theme.of(context).colorScheme.primary.withValues(alpha: 0.18),
-              Theme.of(context).scaffoldBackgroundColor,
-            ],
+            colors: [Color(0xFF233513), MatchCenterColors.pitchBlack],
           ),
         ),
         padding: const EdgeInsets.all(16),
         child: ListView(
           children: [
-            Card(
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                gradient: const RadialGradient(
+                  center: Alignment.topLeft,
+                  radius: 1.4,
+                  colors: [
+                    MatchCenterColors.featuredTop,
+                    MatchCenterColors.panel,
+                    MatchCenterColors.pitchBlack,
+                  ],
+                ),
+                border: Border.all(color: MatchCenterColors.borderBright),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.32),
+                    blurRadius: 26,
+                    offset: const Offset(0, 16),
+                  ),
+                ],
+              ),
               child: Padding(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.sports_soccer,
-                      color: Theme.of(context).colorScheme.primary,
+                      color: MatchCenterColors.lime,
                       size: 44,
                     ),
                     const SizedBox(height: 16),
                     Text(
                       'How are you joining this match?',
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.w800),
+                      style: MatchCenterTypography.display(
+                        fontSize: 30,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        height: 1.08,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'This choice controls what this device is allowed to do. '
                       'Ditto still syncs the match data underneath.',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                      style: MatchCenterTypography.body(
+                        fontSize: 14,
+                        height: 1.45,
+                      ),
                     ),
                   ],
                 ),
@@ -365,19 +397,7 @@ class _RoleSelectionScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             for (final role in AppRole.values) ...[
-              Card(
-                child: ListTile(
-                  leading: CircleAvatar(
-                    child: Icon(
-                      role == AppRole.referee ? Icons.sports : Icons.visibility,
-                    ),
-                  ),
-                  title: Text(role.label),
-                  subtitle: Text(role.description),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => onRoleSelected(role),
-                ),
-              ),
+              _RoleOptionCard(role: role, onTap: () => onRoleSelected(role)),
               const SizedBox(height: 8),
             ],
           ],
@@ -387,10 +407,82 @@ class _RoleSelectionScreen extends StatelessWidget {
   }
 }
 
-class _RoleBadge extends StatelessWidget {
-  const _RoleBadge({required this.role});
+class _RoleOptionCard extends StatelessWidget {
+  const _RoleOptionCard({required this.role, required this.onTap});
 
   final AppRole role;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        hoverColor: MatchCenterColors.lime.withValues(alpha: 0.06),
+        focusColor: MatchCenterColors.lime.withValues(alpha: 0.10),
+        splashColor: MatchCenterColors.lime.withValues(alpha: 0.16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: MatchCenterColors.panel,
+            border: Border.all(color: MatchCenterColors.border),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: MatchCenterColors.lime.withValues(alpha: 0.16),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  role == AppRole.referee ? Icons.sports : Icons.visibility,
+                  color: MatchCenterColors.lime,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      role.label,
+                      style: MatchCenterTypography.body(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      role.description,
+                      style: MatchCenterTypography.body(fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Icon(
+                Icons.chevron_right,
+                color: MatchCenterColors.offWhite,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RoleBadge extends StatelessWidget {
+  const _RoleBadge({required this.role, required this.compact});
+
+  final AppRole role;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -403,7 +495,7 @@ class _RoleBadge extends StatelessWidget {
             role == AppRole.referee ? Icons.sports : Icons.visibility,
             size: 18,
           ),
-          label: Text(role.label),
+          label: compact ? const SizedBox.shrink() : Text(role.label),
         ),
       ),
     );
@@ -436,361 +528,6 @@ class _ViewSwitcher extends StatelessWidget {
       ],
       selected: {showDashboard},
       onSelectionChanged: (selection) => onViewChanged(selection.first),
-    );
-  }
-}
-
-class _DashboardView extends StatelessWidget {
-  const _DashboardView({
-    required this.canWrite,
-    required this.matchesState,
-    required this.allEventsState,
-    required this.selectedMatchId,
-    required this.onMatchSelected,
-    required this.onCreateMatch,
-  });
-
-  final bool canWrite;
-  final AsyncValue<List<MatchControlState>> matchesState;
-  final AsyncValue<List<MatchEvent>> allEventsState;
-  final String selectedMatchId;
-  final ValueChanged<String> onMatchSelected;
-  final VoidCallback onCreateMatch;
-
-  @override
-  Widget build(BuildContext context) {
-    final events = allEventsState.valueOrNull ?? const <MatchEvent>[];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                  child: const Icon(Icons.stadium),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Multi-game dashboard',
-                        style: Theme.of(context).textTheme.titleLarge
-                            ?.copyWith(fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Screen-share view for fans, coaches, and tournament '
-                        'organizers. Every card is powered by local Ditto '
-                        'queries and live observers.',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                FilledButton.icon(
-                  onPressed: canWrite ? onCreateMatch : null,
-                  icon: const Icon(Icons.add),
-                  label: const Text('New match'),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        allEventsState.when(
-          data: (_) => matchesState.when(
-            data: (matches) {
-              final visibleMatches = _ensureDashboardMatches(
-                matches,
-                selectedMatchId,
-              );
-              return _DashboardGrid(
-                matches: visibleMatches,
-                events: events,
-                selectedMatchId: selectedMatchId,
-                onMatchSelected: onMatchSelected,
-              );
-            },
-            loading: () => const LinearProgressIndicator(),
-            error: (error, _) => _ErrorText(error: error),
-          ),
-          loading: () => const LinearProgressIndicator(),
-          error: (error, _) => _ErrorText(error: error),
-        ),
-      ],
-    );
-  }
-
-  List<MatchControlState> _ensureDashboardMatches(
-    List<MatchControlState> matches,
-    String selectedMatchId,
-  ) {
-    if (matches.any((match) => match.id == selectedMatchId)) {
-      return matches;
-    }
-    return [MatchControlState.initial(id: selectedMatchId), ...matches];
-  }
-}
-
-class _DashboardGrid extends StatelessWidget {
-  const _DashboardGrid({
-    required this.matches,
-    required this.events,
-    required this.selectedMatchId,
-    required this.onMatchSelected,
-  });
-
-  final List<MatchControlState> matches;
-  final List<MatchEvent> events;
-  final String selectedMatchId;
-  final ValueChanged<String> onMatchSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    if (matches.isEmpty) {
-      return const Card(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text('No matches yet. Create a match to start the dashboard.'),
-        ),
-      );
-    }
-
-    return StreamBuilder<int>(
-      stream: Stream.periodic(
-        const Duration(seconds: 1),
-        (_) => DateTime.now().millisecondsSinceEpoch,
-      ),
-      initialData: DateTime.now().millisecondsSinceEpoch,
-      builder: (context, snapshot) {
-        final now = snapshot.data ?? DateTime.now().millisecondsSinceEpoch;
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final columns = switch (constraints.maxWidth) {
-              >= 1100 => 4,
-              >= 820 => 3,
-              >= 520 => 2,
-              _ => 1,
-            };
-            return GridView.builder(
-              itemCount: matches.length,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: columns,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 1,
-              ),
-              itemBuilder: (context, index) {
-                final summary = MatchDashboardSummary.fromMatch(
-                  match: matches[index],
-                  events: events,
-                  nowMillis: now,
-                );
-                return _DashboardMatchCard(
-                  summary: summary,
-                  selected: summary.match.id == selectedMatchId,
-                  onTap: () => onMatchSelected(summary.match.id),
-                );
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-class _DashboardMatchCard extends StatelessWidget {
-  const _DashboardMatchCard({
-    required this.summary,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final MatchDashboardSummary summary;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(22),
-        side: BorderSide(
-          color: selected ? colorScheme.primary : Colors.transparent,
-          width: 2,
-        ),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                summary.match.name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w800, height: 1.05),
-              ),
-              const SizedBox(height: 8),
-              _StatusChip(
-                status: summary.match.status,
-                label: summary.match.statusLabel,
-              ),
-              const Spacer(),
-              Center(
-                child: Text(
-                  summary.scoreLabel,
-                  style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -1.5,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              Row(
-                children: [
-                  Expanded(
-                    child: _MiniMetric(
-                      icon: summary.match.isHalfRunning
-                          ? Icons.timer
-                          : Icons.timer_off,
-                      label: summary.clockLabel,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _MiniMetric(
-                      icon: Icons.hourglass_bottom,
-                      label: summary.timeRemainingLabel.replaceFirst(
-                        ' remaining',
-                        '',
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _InfoPill(
-                    icon: Icons.update,
-                    label: summary.latestEventLabel,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MiniMetric extends StatelessWidget {
-  const _MiniMetric({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 15),
-          const SizedBox(width: 5),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelMedium
-                  ?.copyWith(fontWeight: FontWeight.w800),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status, required this.label});
-
-  final MatchStatus status;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isLive =
-        status == MatchStatus.firstHalf || status == MatchStatus.secondHalf;
-    return Chip(
-      visualDensity: VisualDensity.compact,
-      avatar: Icon(
-        isLive ? Icons.radio_button_checked : Icons.circle,
-        size: 14,
-        color: isLive ? colorScheme.error : colorScheme.primary,
-      ),
-      label: Text(label),
-    );
-  }
-}
-
-class _InfoPill extends StatelessWidget {
-  const _InfoPill({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16),
-          const SizedBox(width: 6),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 210),
-            child: Text(
-              label,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1490,6 +1227,12 @@ class _DittoStatusCard extends StatelessWidget {
               ),
               loading: () => const Text('Waiting for presence graph...'),
               error: (error, _) => _ErrorText(error: error),
+            ),
+            const SizedBox(height: 12),
+            managerState.when(
+              data: (manager) => DittoToolsButton(manager: manager),
+              loading: () => const SizedBox.shrink(),
+              error: (_, _) => const SizedBox.shrink(),
             ),
           ],
         ),

@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import '../design/match_center_tokens.dart';
 
 class MatchTrackerTheme {
   static const _grassGreen = Color(0xFF1B7F3A);
   static const _deepPitch = Color(0xFF064E2B);
   static const _lineWhite = Color(0xFFF8FAF6);
-  static const _nightPitch = Color(0xFF071A12);
-  static const _floodlight = Color(0xFFE7F8D8);
 
   static ThemeData get light {
     final scheme = ColorScheme.fromSeed(
@@ -29,18 +30,18 @@ class MatchTrackerTheme {
 
   static ThemeData get dark {
     final scheme = ColorScheme.fromSeed(
-      seedColor: _grassGreen,
+      seedColor: MatchCenterColors.lime,
       brightness: Brightness.dark,
-      primary: _floodlight,
-      secondary: const Color(0xFF7DDE92),
-      surface: const Color(0xFF10271B),
+      primary: MatchCenterColors.lime,
+      secondary: MatchCenterColors.grass,
+      surface: MatchCenterColors.panel,
     );
 
     return _baseTheme(scheme).copyWith(
-      scaffoldBackgroundColor: _nightPitch,
+      scaffoldBackgroundColor: MatchCenterColors.pitchBlack,
       appBarTheme: AppBarTheme(
         centerTitle: false,
-        backgroundColor: _nightPitch,
+        backgroundColor: MatchCenterColors.pitchBlack,
         foregroundColor: scheme.onSurface,
         elevation: 0,
       ),
@@ -51,6 +52,17 @@ class MatchTrackerTheme {
     return ThemeData(
       colorScheme: scheme,
       useMaterial3: true,
+      textTheme: GoogleFonts.chivoTextTheme().copyWith(
+        displayLarge: GoogleFonts.oswald(fontWeight: FontWeight.w800),
+        displayMedium: GoogleFonts.oswald(fontWeight: FontWeight.w800),
+        displaySmall: GoogleFonts.oswald(fontWeight: FontWeight.w700),
+        headlineLarge: GoogleFonts.oswald(fontWeight: FontWeight.w700),
+        headlineMedium: GoogleFonts.oswald(fontWeight: FontWeight.w700),
+        headlineSmall: GoogleFonts.oswald(fontWeight: FontWeight.w700),
+        titleLarge: GoogleFonts.chivo(fontWeight: FontWeight.w800),
+        titleMedium: GoogleFonts.chivo(fontWeight: FontWeight.w700),
+        titleSmall: GoogleFonts.chivo(fontWeight: FontWeight.w700),
+      ),
       cardTheme: CardThemeData(
         elevation: 0,
         color: scheme.surface,

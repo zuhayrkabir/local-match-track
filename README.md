@@ -19,7 +19,8 @@ The current app supports:
 - selecting teams and players for events
 - displaying 18-player team rosters with starters and bench players
 - showing a synced match event timeline
-- showing a multi-game dashboard for demo screen sharing
+- showing a broadcast-style multi-game dashboard for demo screen sharing
+- opening Ditto Tools on native devices to inspect peers, sync status, DQL data, permissions, system settings, and storage
 - running on Android, iOS, and Flutter Web, with the strongest mesh behavior on physical mobile devices
 
 ## Why Ditto matters in this app
@@ -92,15 +93,34 @@ flowchart TD
 | App entry | `lib/main.dart` | Starts Flutter and loads the app. |
 | App shell | `lib/app/app.dart` | Creates the app-level widget structure. |
 | Theme | `lib/app/match_tracker_theme.dart` | Defines football-themed light and dark mode. |
+| Design tokens | `lib/design/match_center_tokens.dart` | Centralizes the Option C broadcast colors and Oswald/Chivo typography. |
 | Providers | `lib/app/providers.dart` | Wires app state, repositories, and Ditto objects into Riverpod. |
 | Ditto setup | `lib/ditto/ditto_manager.dart` | Opens and configures the Ditto SDK instance. |
 | Repository contract | `lib/repositories/match_event_repository.dart` | Defines what the app can do with match data. |
 | Ditto repository | `lib/repositories/ditto/ditto_match_event_repository.dart` | Runs DQL queries, writes documents, and observes synced data. |
 | Main feature UI | `lib/features/match_events/match_events_screen.dart` | Lets users choose a role, create/select matches, control halves, and log events. |
+| Dashboard UI | `lib/features/match_dashboard/match_dashboard_view.dart` | Renders the Option C broadcast dashboard, match cube grid, live feed, and Ditto presence summary. |
 | Role model | `lib/domain/app_role.dart` | Defines referee and spectator roles. |
 | Match state model | `lib/domain/match_control.dart` | Represents half, status, timer, and match clock behavior. |
 | Event model | `lib/domain/match_event.dart` | Represents goals, cards, offsides, substitutions, and event metadata. |
 | Player model | `lib/domain/player.dart` | Represents team rosters, starters, bench players, and player selection. |
+
+## Broadcast dashboard UX
+
+The dashboard uses Option C from the Claude Design references as its visual direction:
+
+- near-black stadium-board background
+- lime live-state accent
+- Oswald condensed display typography for scores and headings
+- Chivo interface typography for labels and body copy
+- a featured match panel with an oversized score
+- smaller match cubes for the rest of the games
+- a right rail for a chronological team-sided event timeline and live pitch status
+- a dark broadcast-themed role-selection page
+
+The dashboard is still powered by Ditto data. It reads the synchronized `matches` and `match_events` collections through the same Riverpod providers as the referee workflow. No fake dashboard-only state is introduced.
+
+Timeline events are positioned by `teamSide`: home-team events render to the left of the center line, away-team events render to the right, and neutral events stay centered.
 
 ## Data model
 
@@ -329,6 +349,21 @@ For a two-device test:
 Important: “offline” does not mean turning every radio off.
 
 For local peer-to-peer sync, devices still need a transport such as Bluetooth, local Wi-Fi, LAN, AWDL, or Wi-Fi Aware. A Wi-Fi router can have no internet connection and still allow devices to talk locally.
+
+## Ditto Tools
+
+The app includes the `ditto_flutter_tools` package for native-device demos.
+
+On native Android or iOS, tap the tools icon in the top app bar or open Match Detail and tap **Open Ditto Tools** in the Ditto status card to inspect:
+
+- visible peers
+- peer sync status
+- DQL query results
+- local permission health
+- system settings
+- Ditto storage/log export tools
+
+Ditto Tools is intended for native targets such as Android and iOS. The Flutter Web build is still useful as the dashboard/screen-share view, but the official Ditto Tools UI is disabled there.
 
 ## iOS notes
 
