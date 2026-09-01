@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import '../../domain/app_role.dart';
 import '../../domain/match_control.dart';
+import '../../domain/match_dashboard_summary.dart';
 import '../../domain/match_event.dart';
 import '../../domain/player.dart';
 import '../../ditto/ditto_manager.dart';
@@ -30,7 +31,9 @@ class _MatchEventsScreenState extends ConsumerState<MatchEventsScreen> {
     final matchesState = ref.watch(matchesProvider);
     final matchControlState = ref.watch(matchControlProvider);
     final eventsState = ref.watch(matchEventsProvider);
+    final allEventsState = ref.watch(allMatchEventsProvider);
     final presenceState = ref.watch(dittoPresenceSummaryProvider);
+    final showDashboard = ref.watch(showDashboardProvider);
     final canWrite =
         (managerState.valueOrNull?.dataAccessReady ?? false) &&
         (selectedRole?.canWriteMatch ?? false);
@@ -72,9 +75,11 @@ class _MatchEventsScreenState extends ConsumerState<MatchEventsScreen> {
         padding: const EdgeInsets.all(16),
         child: ListView(
           children: [
-            _MatchHero(
-              eventsState: eventsState,
-              matchControlState: matchControlState,
+            _ViewSwitcher(
+              showDashboard: showDashboard,
+              onViewChanged: (value) {
+                ref.read(showDashboardProvider.notifier).state = value;
+              },
             ),
             const SizedBox(height: 16),
             _DittoStatusCard(
@@ -82,88 +87,108 @@ class _MatchEventsScreenState extends ConsumerState<MatchEventsScreen> {
               presenceState: presenceState,
             ),
             const SizedBox(height: 16),
-            _MatchSessionCard(
-              canWrite: canWrite,
-              matchesState: matchesState,
-              selectedMatchId: ref.watch(selectedMatchIdProvider),
-              onMatchSelected: (matchId) {
-                if (matchId == null) return;
-                ref.read(selectedMatchIdProvider.notifier).state = matchId;
-              },
-              onCreateMatch: _createMatch,
-              onDeleteMatch: _deleteSelectedMatch,
-            ),
-            const SizedBox(height: 16),
-            if (selectedRole.canWriteMatch) ...[
-              _MatchControlCard(
+            if (showDashboard)
+              _DashboardView(
                 canWrite: canWrite,
+                matchesState: matchesState,
+                allEventsState: allEventsState,
+                selectedMatchId: ref.watch(selectedMatchIdProvider),
+                onMatchSelected: (matchId) {
+                  ref.read(selectedMatchIdProvider.notifier).state = matchId;
+                  ref.read(showDashboardProvider.notifier).state = false;
+                },
+                onCreateMatch: _createMatch,
+              )
+            else ...[
+              _MatchHero(
+                eventsState: eventsState,
                 matchControlState: matchControlState,
-                onSelectHalf: _selectHalf,
-                onStartHalf: _startSelectedHalf,
-                onEndHalf: _endCurrentHalf,
               ),
               const SizedBox(height: 16),
-              _OfficialEventCard(
+              _MatchSessionCard(
                 canWrite: canWrite,
-                selectedEventType: _selectedEventType,
-                selectedTeamSide: _selectedTeamSide,
-                selectedPlayer: _selectedPlayer,
-                onEventTypeChanged: (type) {
-                  if (type == null) return;
-                  setState(() => _selectedEventType = type);
+                matchesState: matchesState,
+                selectedMatchId: ref.watch(selectedMatchIdProvider),
+                onMatchSelected: (matchId) {
+                  if (matchId == null) return;
+                  ref.read(selectedMatchIdProvider.notifier).state = matchId;
                 },
-                onTeamChanged: (teamSide) {
-                  if (teamSide == null) return;
-                  setState(() {
-                    _selectedTeamSide = teamSide;
-                    _selectedPlayer = demoPlayersForSide(teamSide).first;
-                  });
-                },
-                onPlayerChanged: (player) {
-                  if (player == null) return;
-                  setState(() => _selectedPlayer = player);
-                },
-                onLogEvent: _logOfficialEvent,
+                onCreateMatch: _createMatch,
+                onDeleteMatch: _deleteSelectedMatch,
               ),
               const SizedBox(height: 16),
-              _SubstitutionCard(
-                canWrite: canWrite,
-                selectedTeamSide: _selectedSubstitutionTeamSide,
-                selectedPlayerOut: _selectedPlayerOut,
-                selectedPlayerIn: _selectedPlayerIn,
-                onTeamChanged: (teamSide) {
-                  if (teamSide == null) return;
-                  setState(() {
-                    _selectedSubstitutionTeamSide = teamSide;
-                    _selectedPlayerOut = demoStartersForSide(teamSide).first;
-                    _selectedPlayerIn = demoBenchPlayersForSide(teamSide).first;
-                  });
-                },
-                onPlayerOutChanged: (player) {
-                  if (player == null) return;
-                  setState(() => _selectedPlayerOut = player);
-                },
-                onPlayerInChanged: (player) {
-                  if (player == null) return;
-                  setState(() => _selectedPlayerIn = player);
-                },
-                onLogSubstitution: _logSubstitution,
+              if (selectedRole.canWriteMatch) ...[
+                _MatchControlCard(
+                  canWrite: canWrite,
+                  matchControlState: matchControlState,
+                  onSelectHalf: _selectHalf,
+                  onStartHalf: _startSelectedHalf,
+                  onEndHalf: _endCurrentHalf,
+                ),
+                const SizedBox(height: 16),
+                _OfficialEventCard(
+                  canWrite: canWrite,
+                  selectedEventType: _selectedEventType,
+                  selectedTeamSide: _selectedTeamSide,
+                  selectedPlayer: _selectedPlayer,
+                  onEventTypeChanged: (type) {
+                    if (type == null) return;
+                    setState(() => _selectedEventType = type);
+                  },
+                  onTeamChanged: (teamSide) {
+                    if (teamSide == null) return;
+                    setState(() {
+                      _selectedTeamSide = teamSide;
+                      _selectedPlayer = demoPlayersForSide(teamSide).first;
+                    });
+                  },
+                  onPlayerChanged: (player) {
+                    if (player == null) return;
+                    setState(() => _selectedPlayer = player);
+                  },
+                  onLogEvent: _logOfficialEvent,
+                ),
+                const SizedBox(height: 16),
+                _SubstitutionCard(
+                  canWrite: canWrite,
+                  selectedTeamSide: _selectedSubstitutionTeamSide,
+                  selectedPlayerOut: _selectedPlayerOut,
+                  selectedPlayerIn: _selectedPlayerIn,
+                  onTeamChanged: (teamSide) {
+                    if (teamSide == null) return;
+                    setState(() {
+                      _selectedSubstitutionTeamSide = teamSide;
+                      _selectedPlayerOut = demoStartersForSide(teamSide).first;
+                      _selectedPlayerIn = demoBenchPlayersForSide(teamSide)
+                          .first;
+                    });
+                  },
+                  onPlayerOutChanged: (player) {
+                    if (player == null) return;
+                    setState(() => _selectedPlayerOut = player);
+                  },
+                  onPlayerInChanged: (player) {
+                    if (player == null) return;
+                    setState(() => _selectedPlayerIn = player);
+                  },
+                  onLogSubstitution: _logSubstitution,
+                ),
+              ] else
+                const _SpectatorNotice(),
+              const SizedBox(height: 16),
+              const _RosterCard(),
+              const SizedBox(height: 16),
+              Text(
+                'Match timeline',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
-            ] else
-              const _SpectatorNotice(),
-            const SizedBox(height: 16),
-            const _RosterCard(),
-            const SizedBox(height: 16),
-            Text(
-              'Match timeline',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            eventsState.when(
-              data: (events) => _EventList(events: events),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => _ErrorText(error: error),
-            ),
+              const SizedBox(height: 8),
+              eventsState.when(
+                data: (events) => _EventList(events: events),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) => _ErrorText(error: error),
+              ),
+            ],
           ],
         ),
       ),
@@ -380,6 +405,391 @@ class _RoleBadge extends StatelessWidget {
           ),
           label: Text(role.label),
         ),
+      ),
+    );
+  }
+}
+
+class _ViewSwitcher extends StatelessWidget {
+  const _ViewSwitcher({
+    required this.showDashboard,
+    required this.onViewChanged,
+  });
+
+  final bool showDashboard;
+  final ValueChanged<bool> onViewChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<bool>(
+      segments: const [
+        ButtonSegment(
+          value: true,
+          icon: Icon(Icons.dashboard),
+          label: Text('Dashboard'),
+        ),
+        ButtonSegment(
+          value: false,
+          icon: Icon(Icons.sports_soccer),
+          label: Text('Match detail'),
+        ),
+      ],
+      selected: {showDashboard},
+      onSelectionChanged: (selection) => onViewChanged(selection.first),
+    );
+  }
+}
+
+class _DashboardView extends StatelessWidget {
+  const _DashboardView({
+    required this.canWrite,
+    required this.matchesState,
+    required this.allEventsState,
+    required this.selectedMatchId,
+    required this.onMatchSelected,
+    required this.onCreateMatch,
+  });
+
+  final bool canWrite;
+  final AsyncValue<List<MatchControlState>> matchesState;
+  final AsyncValue<List<MatchEvent>> allEventsState;
+  final String selectedMatchId;
+  final ValueChanged<String> onMatchSelected;
+  final VoidCallback onCreateMatch;
+
+  @override
+  Widget build(BuildContext context) {
+    final events = allEventsState.valueOrNull ?? const <MatchEvent>[];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  child: const Icon(Icons.stadium),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Multi-game dashboard',
+                        style: Theme.of(context).textTheme.titleLarge
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Screen-share view for fans, coaches, and tournament '
+                        'organizers. Every card is powered by local Ditto '
+                        'queries and live observers.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                FilledButton.icon(
+                  onPressed: canWrite ? onCreateMatch : null,
+                  icon: const Icon(Icons.add),
+                  label: const Text('New match'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        allEventsState.when(
+          data: (_) => matchesState.when(
+            data: (matches) {
+              final visibleMatches = _ensureDashboardMatches(
+                matches,
+                selectedMatchId,
+              );
+              return _DashboardGrid(
+                matches: visibleMatches,
+                events: events,
+                selectedMatchId: selectedMatchId,
+                onMatchSelected: onMatchSelected,
+              );
+            },
+            loading: () => const LinearProgressIndicator(),
+            error: (error, _) => _ErrorText(error: error),
+          ),
+          loading: () => const LinearProgressIndicator(),
+          error: (error, _) => _ErrorText(error: error),
+        ),
+      ],
+    );
+  }
+
+  List<MatchControlState> _ensureDashboardMatches(
+    List<MatchControlState> matches,
+    String selectedMatchId,
+  ) {
+    if (matches.any((match) => match.id == selectedMatchId)) {
+      return matches;
+    }
+    return [MatchControlState.initial(id: selectedMatchId), ...matches];
+  }
+}
+
+class _DashboardGrid extends StatelessWidget {
+  const _DashboardGrid({
+    required this.matches,
+    required this.events,
+    required this.selectedMatchId,
+    required this.onMatchSelected,
+  });
+
+  final List<MatchControlState> matches;
+  final List<MatchEvent> events;
+  final String selectedMatchId;
+  final ValueChanged<String> onMatchSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    if (matches.isEmpty) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text('No matches yet. Create a match to start the dashboard.'),
+        ),
+      );
+    }
+
+    return StreamBuilder<int>(
+      stream: Stream.periodic(
+        const Duration(seconds: 1),
+        (_) => DateTime.now().millisecondsSinceEpoch,
+      ),
+      initialData: DateTime.now().millisecondsSinceEpoch,
+      builder: (context, snapshot) {
+        final now = snapshot.data ?? DateTime.now().millisecondsSinceEpoch;
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = switch (constraints.maxWidth) {
+              >= 1100 => 4,
+              >= 820 => 3,
+              >= 520 => 2,
+              _ => 1,
+            };
+            return GridView.builder(
+              itemCount: matches.length,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columns,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 1,
+              ),
+              itemBuilder: (context, index) {
+                final summary = MatchDashboardSummary.fromMatch(
+                  match: matches[index],
+                  events: events,
+                  nowMillis: now,
+                );
+                return _DashboardMatchCard(
+                  summary: summary,
+                  selected: summary.match.id == selectedMatchId,
+                  onTap: () => onMatchSelected(summary.match.id),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _DashboardMatchCard extends StatelessWidget {
+  const _DashboardMatchCard({
+    required this.summary,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final MatchDashboardSummary summary;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: BorderSide(
+          color: selected ? colorScheme.primary : Colors.transparent,
+          width: 2,
+        ),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                summary.match.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w800, height: 1.05),
+              ),
+              const SizedBox(height: 8),
+              _StatusChip(
+                status: summary.match.status,
+                label: summary.match.statusLabel,
+              ),
+              const Spacer(),
+              Center(
+                child: Text(
+                  summary.scoreLabel,
+                  style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -1.5,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Row(
+                children: [
+                  Expanded(
+                    child: _MiniMetric(
+                      icon: summary.match.isHalfRunning
+                          ? Icons.timer
+                          : Icons.timer_off,
+                      label: summary.clockLabel,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _MiniMetric(
+                      icon: Icons.hourglass_bottom,
+                      label: summary.timeRemainingLabel.replaceFirst(
+                        ' remaining',
+                        '',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _InfoPill(
+                    icon: Icons.update,
+                    label: summary.latestEventLabel,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniMetric extends StatelessWidget {
+  const _MiniMetric({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 15),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium
+                  ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.status, required this.label});
+
+  final MatchStatus status;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isLive =
+        status == MatchStatus.firstHalf || status == MatchStatus.secondHalf;
+    return Chip(
+      visualDensity: VisualDensity.compact,
+      avatar: Icon(
+        isLive ? Icons.radio_button_checked : Icons.circle,
+        size: 14,
+        color: isLive ? colorScheme.error : colorScheme.primary,
+      ),
+      label: Text(label),
+    );
+  }
+}
+
+class _InfoPill extends StatelessWidget {
+  const _InfoPill({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16),
+          const SizedBox(width: 6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 210),
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+          ),
+        ],
       ),
     );
   }

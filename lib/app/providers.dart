@@ -12,6 +12,8 @@ final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
 
 final selectedRoleProvider = StateProvider<AppRole?>((ref) => null);
 
+final showDashboardProvider = StateProvider<bool>((ref) => true);
+
 final selectedMatchIdProvider = StateProvider<String>(
   (ref) => MatchControlState.demoMatchId,
 );
@@ -42,6 +44,11 @@ final matchesProvider = StreamProvider<List<MatchControlState>>((ref) async* {
 final matchEventsProvider = StreamProvider<List<MatchEvent>>((ref) async* {
   final repository = await ref.watch(matchEventRepositoryProvider.future);
   yield* repository.watchEvents();
+});
+
+final allMatchEventsProvider = StreamProvider<List<MatchEvent>>((ref) async* {
+  final repository = await ref.watch(matchEventRepositoryProvider.future);
+  yield* repository.watchAllEvents();
 });
 
 final matchControlProvider = StreamProvider<MatchControlState>((ref) async* {

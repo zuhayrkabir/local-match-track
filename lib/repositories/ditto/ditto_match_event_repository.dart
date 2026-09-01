@@ -139,6 +139,41 @@ class DittoMatchEventRepository implements MatchEventRepository {
   }
 
   @override
+  Stream<List<MatchEvent>> watchAllEvents() {
+    final controller = StreamController<List<MatchEvent>>();
+    late final StoreObserver observer;
+
+    Future<void> emit(QueryResult result) async {
+      final events =
+          result.items.map((item) => MatchEvent.fromJson(item.value)).toList()
+            ..sort((a, b) => a.createdAtMillis.compareTo(b.createdAtMillis));
+
+      if (!controller.isClosed) {
+        controller.add(events);
+      }
+    }
+
+    Future<void> loadInitialEvents() async {
+      final result = await _ditto.store.execute(
+        'SELECT * FROM match_events ORDER BY createdAtMillis ASC',
+      );
+      await emit(result);
+    }
+
+    observer = _ditto.store.registerObserver(
+      'SELECT * FROM match_events ORDER BY createdAtMillis ASC',
+      onChange: (result) {
+        unawaited(emit(result));
+      },
+    );
+
+    unawaited(loadInitialEvents());
+
+    controller.onCancel = observer.cancel;
+    return controller.stream;
+  }
+
+  @override
   Future<MatchControlState> createMatch() async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final match = MatchControlState.initial(

@@ -9,6 +9,8 @@ abstract interface class MatchEventRepository {
 
   Stream<List<MatchEvent>> watchEvents();
 
+  Stream<List<MatchEvent>> watchAllEvents();
+
   Future<MatchControlState> createMatch();
 
   Future<void> deleteMatch(String matchId);
@@ -51,6 +53,11 @@ class DisabledMatchEventRepository implements MatchEventRepository {
 
   @override
   Stream<List<MatchEvent>> watchEvents() {
+    return Stream.value(const []);
+  }
+
+  @override
+  Stream<List<MatchEvent>> watchAllEvents() {
     return Stream.value(const []);
   }
 

@@ -19,6 +19,7 @@ The current app supports:
 - selecting teams and players for events
 - displaying 18-player team rosters with starters and bench players
 - showing a synced match event timeline
+- showing a multi-game dashboard for demo screen sharing
 - running on Android, iOS, and Flutter Web, with the strongest mesh behavior on physical mobile devices
 
 ## Why Ditto matters in this app
@@ -290,6 +291,25 @@ flutter run -d your-device-id \
 ```
 
 Use the same Ditto database ID, server URL, and token on every device that should join the same test.
+
+Run the web dashboard locally for screen sharing:
+
+```bash
+flutter run -d chrome \
+  --web-hostname=localhost \
+  --web-port=8080 \
+  --dart-define=DITTO_DATABASE_ID=your-database-id \
+  --dart-define=DITTO_SERVER_URL=https://your-ditto-server-url \
+  --dart-define=DITTO_PLAYGROUND_TOKEN=your-development-token
+```
+
+Then open:
+
+```text
+http://localhost:8080
+```
+
+The browser is useful as a projector/dashboard view. Physical Android and iOS devices are still better for validating native mesh transports like Bluetooth and local peer discovery.
 
 ## Running multiple devices
 
