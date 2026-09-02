@@ -10,6 +10,7 @@ class MatchTrackerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Local-First Match Tracker',
+      debugShowCheckedModeBanner: false,
       theme: MatchTrackerTheme.theme,
       home: const MatchEventsScreen(),
     );

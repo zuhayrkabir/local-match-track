@@ -471,10 +471,23 @@ class _MatchEventsScreenState extends ConsumerState<MatchEventsScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Assistant referee review'),
+          title: Text(
+            'Assistant referee review',
+            style: MatchCenterTypography.body(
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              color: MatchCenterColors.offWhite,
+            ),
+          ),
           content: Text(
             '${proposal.label}\n'
             'Minute ${proposal.minute} • ${proposal.subjectLabel}',
+            style: MatchCenterTypography.body(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: MatchCenterColors.offWhite,
+              height: 1.45,
+            ),
           ),
           actions: [
             TextButton(

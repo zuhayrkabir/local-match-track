@@ -68,6 +68,22 @@ class MatchTrackerTheme {
         color: MatchCenterColors.borderBright,
         thickness: 1,
       ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: MatchCenterColors.panel,
+        surfaceTintColor: Colors.transparent,
+        titleTextStyle: MatchCenterTypography.body(
+          fontSize: 20,
+          fontWeight: FontWeight.w900,
+          color: MatchCenterColors.offWhite,
+        ),
+        contentTextStyle: MatchCenterTypography.body(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: MatchCenterColors.offWhite,
+          height: 1.45,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: MatchCenterColors.panelRaised,
