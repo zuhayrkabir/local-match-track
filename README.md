@@ -518,17 +518,3 @@ For iOS build validation without installing on a phone:
 ```bash
 flutter build ios --debug --no-codesign
 ```
-
-## Learning goal
-
-The point of this repo is not just “make a soccer app.”
-
-The point is to learn how Ditto changes app design:
-
-- devices can write locally first
-- apps do not need to block on the cloud
-- multiple peers can converge after reconnecting
-- the local database is the source of truth for the UI
-- sync behavior becomes part of the product experience
-
-That is the engineering story this project should show.
