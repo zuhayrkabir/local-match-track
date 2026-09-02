@@ -22,6 +22,7 @@
 - [x] Fixed compact match selector and clock-pill overflow on phone-sized screens.
 - [x] Removed the theme toggle so every platform uses the Option C broadcast-dark theme.
 - [x] Restyled the match detail page to share dashboard-style panels, typography, accents, and timeline rows.
+- [x] Reused the broadcast dashboard's team-sided chronological timeline on the match detail page.
 - [x] Added Assistant Referee mode for proposing offside/foul reviews.
 - [x] Added referee review-request panel for accepting or rejecting assistant proposals.
 - [x] Added referee-online gating so assistants can view the match but cannot send proposals until a synced referee heartbeat is fresh.

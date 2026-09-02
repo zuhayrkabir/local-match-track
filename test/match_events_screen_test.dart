@@ -14,6 +14,10 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   GoogleFonts.config.allowRuntimeFetching = false;
 
+  test('official referee event picker includes ordinary fouls', () {
+    expect(officialRefereeEventTypes, contains(MatchEventType.foul));
+  });
+
   testWidgets('detail timeline follows the selected match on compact screens', (
     tester,
   ) async {
@@ -45,6 +49,14 @@ void main() {
     );
 
     const events = [
+      MatchEvent(
+        id: 'neutral-event',
+        matchId: 'match-2',
+        type: MatchEventType.halfStarted,
+        teamName: 'First half',
+        minute: 0,
+        createdAtMillis: 500,
+      ),
       MatchEvent(
         id: 'other-event',
         matchId: 'match-1',
@@ -100,6 +112,14 @@ void main() {
 
     expect(find.textContaining('Selected Match FC'), findsOneWidget);
     expect(find.textContaining('Wrong Match FC'), findsNothing);
+    expect(find.text('GREEN FC'), findsOneWidget);
+    expect(find.text('WHITE FC'), findsOneWidget);
+    expect(find.text('Half started • 0’'), findsOneWidget);
+    expect(find.text('Yellow card'), findsOneWidget);
+    expect(
+      tester.getCenter(find.text('Half started • 0’')).dx,
+      closeTo(195, 36),
+    );
     expect(tester.takeException(), isNull);
   });
 }

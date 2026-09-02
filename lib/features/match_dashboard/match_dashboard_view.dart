@@ -1011,6 +1011,20 @@ class TeamSideTimelineRow extends StatelessWidget {
     final isHome = side == TeamSide.home;
     final isAway = side == TeamSide.away;
     final accent = _eventColor(event.type);
+
+    if (!isHome && !isAway) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(
+          children: [
+            const Expanded(child: SizedBox.shrink()),
+            NeutralTimelineMarker(event: event, accent: accent),
+            const Expanded(child: SizedBox.shrink()),
+          ],
+        ),
+      );
+    }
+
     final bubble = TimelineEventBubble(
       event: event,
       alignRight: isHome,
@@ -1207,6 +1221,80 @@ class TimelineEventBubble extends StatelessWidget {
 
     return event.subjectLabel;
   }
+}
+
+class NeutralTimelineMarker extends StatelessWidget {
+  const NeutralTimelineMarker({
+    super.key,
+    required this.event,
+    required this.accent,
+  });
+
+  final MatchEvent event;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 210),
+      child: Container(
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.12),
+          border: Border.all(color: accent.withValues(alpha: 0.44)),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(_neutralEventIcon(event.type), color: accent, size: 15),
+            const SizedBox(width: 7),
+            Flexible(
+              child: Text(
+                '${_neutralEventHeadline(event.type)} • ${event.minute}’',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: MatchCenterTypography.body(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  color: MatchCenterColors.offWhite,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+IconData _neutralEventIcon(MatchEventType type) {
+  return switch (type) {
+    MatchEventType.halfStarted => Icons.play_arrow,
+    MatchEventType.halfEnded => Icons.stop,
+    MatchEventType.goal => Icons.sports_soccer,
+    MatchEventType.yellowCard || MatchEventType.redCard => Icons.style,
+    MatchEventType.offside => Icons.flag,
+    MatchEventType.substitution => Icons.swap_horiz,
+    MatchEventType.foul => Icons.sports,
+    MatchEventType.note => Icons.notes,
+  };
+}
+
+String _neutralEventHeadline(MatchEventType type) {
+  return switch (type) {
+    MatchEventType.halfStarted => 'Half started',
+    MatchEventType.halfEnded => 'Half ended',
+    MatchEventType.goal => 'Goal',
+    MatchEventType.yellowCard => 'Yellow card',
+    MatchEventType.redCard => 'Red card',
+    MatchEventType.offside => 'Offside',
+    MatchEventType.substitution => 'Substitution',
+    MatchEventType.foul => 'Foul',
+    MatchEventType.note => 'Note',
+  };
 }
 
 Color _eventColor(MatchEventType type) {

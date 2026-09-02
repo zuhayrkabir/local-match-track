@@ -14,6 +14,14 @@ import '../../ditto/ditto_manager.dart';
 import '../ditto_tools/ditto_tools_entry.dart';
 import '../match_dashboard/match_dashboard_view.dart';
 
+const officialRefereeEventTypes = [
+  MatchEventType.goal,
+  MatchEventType.yellowCard,
+  MatchEventType.redCard,
+  MatchEventType.foul,
+  MatchEventType.offside,
+];
+
 class MatchEventsScreen extends ConsumerStatefulWidget {
   const MatchEventsScreen({super.key});
 
@@ -1162,13 +1170,6 @@ class _OfficialEventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const officialEventTypes = [
-      MatchEventType.goal,
-      MatchEventType.yellowCard,
-      MatchEventType.redCard,
-      MatchEventType.offside,
-    ];
-
     return _DetailPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1182,7 +1183,7 @@ class _OfficialEventCard extends StatelessWidget {
             initialValue: selectedEventType,
             decoration: const InputDecoration(labelText: 'Event'),
             items: [
-              for (final type in officialEventTypes)
+              for (final type in officialRefereeEventTypes)
                 DropdownMenuItem(value: type, child: Text(type.label)),
             ],
             onChanged: canWrite ? onEventTypeChanged : null,
@@ -1793,70 +1794,13 @@ class _EventList extends StatelessWidget {
       );
     }
 
-    return Column(
-      children: [
-        for (final event in events)
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 6),
-            decoration: BoxDecoration(
-              color: MatchCenterColors.panel,
-              border: Border.all(color: MatchCenterColors.borderBright),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundColor: _eventColor(event.type)
-                    .withValues(alpha: 0.18),
-                foregroundColor: _eventColor(event.type),
-                child: Icon(_iconFor(event.type)),
-              ),
-              title: Text(
-                '${event.label} — ${event.subjectLabel}',
-                style: MatchCenterTypography.body(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: MatchCenterColors.offWhite,
-                ),
-              ),
-              subtitle: Text(
-                _subtitleFor(event),
-                style: MatchCenterTypography.body(fontSize: 12),
-              ),
-              trailing: const Icon(
-                Icons.chevron_right,
-                color: MatchCenterColors.textSoft,
-              ),
-            ),
-          ),
-      ],
+    return _DetailPanel(
+      child: TeamSideTimeline(
+        events: events,
+        homeTeamName: teamNameForSide(TeamSide.home),
+        awayTeamName: teamNameForSide(TeamSide.away),
+      ),
     );
-  }
-
-  String _subtitleFor(MatchEvent event) {
-    if (event.type == MatchEventType.substitution &&
-        event.substitutePlayerName != null &&
-        event.substitutePlayerNumber != null &&
-        event.playerName != null &&
-        event.playerNumber != null) {
-      return 'Minute ${event.minute} • 🟢 #${event.substitutePlayerNumber} '
-          '${event.substitutePlayerName} on • 🔴 #${event.playerNumber} '
-          '${event.playerName} off';
-    }
-    return 'Minute ${event.minute} • ${event.id}';
-  }
-
-  IconData _iconFor(MatchEventType type) {
-    return switch (type) {
-      MatchEventType.halfStarted => Icons.play_arrow,
-      MatchEventType.halfEnded => Icons.stop,
-      MatchEventType.goal => Icons.sports_soccer,
-      MatchEventType.yellowCard => Icons.style,
-      MatchEventType.redCard => Icons.style,
-      MatchEventType.offside => Icons.flag,
-      MatchEventType.substitution => Icons.swap_horiz,
-      MatchEventType.foul => Icons.sports,
-      MatchEventType.note => Icons.note,
-    };
   }
 }
 
