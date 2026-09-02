@@ -12,6 +12,69 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   GoogleFonts.config.allowRuntimeFetching = false;
 
+  testWidgets('promotes a match cube into the featured dashboard slot', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    String selectedMatchId = 'match-1';
+
+    const matches = [
+      MatchControlState(
+        id: 'match-1',
+        name: 'Green FC vs White FC',
+        selectedHalf: MatchHalf.first,
+        status: MatchStatus.firstHalf,
+        createdAtMillis: 1000,
+        updatedAtMillis: 1000,
+        elapsedSeconds: 60,
+        clockStartedAtMillis: 1000,
+      ),
+      MatchControlState(
+        id: 'match-2',
+        name: 'Blue FC vs Gold FC',
+        selectedHalf: MatchHalf.first,
+        status: MatchStatus.notStarted,
+        createdAtMillis: 2000,
+        updatedAtMillis: 2000,
+        elapsedSeconds: 0,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: MatchDashboardView(
+              canWrite: true,
+              matchesState: const AsyncData(matches),
+              allEventsState: const AsyncData([]),
+              presenceState: const AsyncData(
+                DittoPresenceSummary(
+                  localPeerName: 'Test peer',
+                  remotePeerCount: 2,
+                  connectedToDittoServer: true,
+                ),
+              ),
+              selectedMatchId: selectedMatchId,
+              onMatchSelected: (value) => selectedMatchId = value,
+              onCreateMatch: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Blue FC vs Gold FC'));
+    await tester.pump();
+
+    expect(selectedMatchId, 'match-2');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('renders team-sided timeline events without layout exceptions', (
     tester,
   ) async {
@@ -74,6 +137,8 @@ void main() {
     await tester.pump();
 
     expect(find.text('TEAM TIMELINE'), findsOneWidget);
+    expect(find.text('GREEN FC'), findsAtLeastNWidgets(1));
+    expect(find.text('WHITE FC'), findsAtLeastNWidgets(1));
     expect(find.text('Goal'), findsOneWidget);
     expect(find.text('Yellow card'), findsOneWidget);
     expect(tester.takeException(), isNull);

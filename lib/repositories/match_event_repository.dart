@@ -1,5 +1,7 @@
 import '../domain/match_event.dart';
+import '../domain/app_role.dart';
 import '../domain/match_control.dart';
+import '../domain/match_review_proposal.dart';
 import '../domain/player.dart';
 
 abstract interface class MatchEventRepository {
@@ -10,6 +12,10 @@ abstract interface class MatchEventRepository {
   Stream<List<MatchEvent>> watchEvents();
 
   Stream<List<MatchEvent>> watchAllEvents();
+
+  Stream<List<MatchReviewProposal>> watchPendingReviewProposals();
+
+  Stream<bool> watchRefereeOnline();
 
   Future<MatchControlState> createMatch();
 
@@ -34,6 +40,18 @@ abstract interface class MatchEventRepository {
   });
 
   Future<void> addTestGoal();
+
+  Future<void> proposeReview({
+    required MatchEventType type,
+    required TeamSide teamSide,
+    DemoPlayer? player,
+  });
+
+  Future<void> acceptReviewProposal(MatchReviewProposal proposal);
+
+  Future<void> rejectReviewProposal(MatchReviewProposal proposal);
+
+  Future<void> publishParticipantHeartbeat(AppRole role);
 }
 
 class DisabledMatchEventRepository implements MatchEventRepository {
@@ -59,6 +77,16 @@ class DisabledMatchEventRepository implements MatchEventRepository {
   @override
   Stream<List<MatchEvent>> watchAllEvents() {
     return Stream.value(const []);
+  }
+
+  @override
+  Stream<List<MatchReviewProposal>> watchPendingReviewProposals() {
+    return Stream.value(const []);
+  }
+
+  @override
+  Stream<bool> watchRefereeOnline() {
+    return Stream.value(false);
   }
 
   @override
@@ -106,6 +134,30 @@ class DisabledMatchEventRepository implements MatchEventRepository {
 
   @override
   Future<void> addTestGoal() {
+    throw StateError(reason);
+  }
+
+  @override
+  Future<void> proposeReview({
+    required MatchEventType type,
+    required TeamSide teamSide,
+    DemoPlayer? player,
+  }) {
+    throw StateError(reason);
+  }
+
+  @override
+  Future<void> acceptReviewProposal(MatchReviewProposal proposal) {
+    throw StateError(reason);
+  }
+
+  @override
+  Future<void> rejectReviewProposal(MatchReviewProposal proposal) {
+    throw StateError(reason);
+  }
+
+  @override
+  Future<void> publishParticipantHeartbeat(AppRole role) {
     throw StateError(reason);
   }
 }

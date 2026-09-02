@@ -12,10 +12,11 @@ This project is not trying to become a full production sports platform on day on
 
 The current app supports:
 
-- choosing a role when the app opens: referee or spectator
+- choosing a role when the app opens: referee, assistant referee, or spectator
 - creating, selecting, and deleting match sessions
 - starting and ending the first or second half
 - recording goals, cards, offsides, and substitutions
+- proposing assistant-referee offside/foul reviews that the main referee can accept or reject
 - selecting teams and players for events
 - displaying 18-player team rosters with starters and bench players
 - showing a synced match event timeline
@@ -92,7 +93,7 @@ flowchart TD
 | --- | --- | --- |
 | App entry | `lib/main.dart` | Starts Flutter and loads the app. |
 | App shell | `lib/app/app.dart` | Creates the app-level widget structure. |
-| Theme | `lib/app/match_tracker_theme.dart` | Defines football-themed light and dark mode. |
+| Theme | `lib/app/match_tracker_theme.dart` | Defines the single broadcast-dark football theme. |
 | Design tokens | `lib/design/match_center_tokens.dart` | Centralizes the Option C broadcast colors and Oswald/Chivo typography. |
 | Providers | `lib/app/providers.dart` | Wires app state, repositories, and Ditto objects into Riverpod. |
 | Ditto setup | `lib/ditto/ditto_manager.dart` | Opens and configures the Ditto SDK instance. |
@@ -100,9 +101,10 @@ flowchart TD
 | Ditto repository | `lib/repositories/ditto/ditto_match_event_repository.dart` | Runs DQL queries, writes documents, and observes synced data. |
 | Main feature UI | `lib/features/match_events/match_events_screen.dart` | Lets users choose a role, create/select matches, control halves, and log events. |
 | Dashboard UI | `lib/features/match_dashboard/match_dashboard_view.dart` | Renders the Option C broadcast dashboard, match cube grid, live feed, and Ditto presence summary. |
-| Role model | `lib/domain/app_role.dart` | Defines referee and spectator roles. |
+| Role model | `lib/domain/app_role.dart` | Defines referee, assistant referee, and spectator roles. |
 | Match state model | `lib/domain/match_control.dart` | Represents half, status, timer, and match clock behavior. |
 | Event model | `lib/domain/match_event.dart` | Represents goals, cards, offsides, substitutions, and event metadata. |
+| Review proposal model | `lib/domain/match_review_proposal.dart` | Represents assistant-referee review requests before the referee accepts/rejects them. |
 | Player model | `lib/domain/player.dart` | Represents team rosters, starters, bench players, and player selection. |
 
 ## Broadcast dashboard UX
@@ -124,7 +126,7 @@ Timeline events are positioned by `teamSide`: home-team events render to the lef
 
 ## Data model
 
-The app currently uses two main Ditto collections.
+The app currently uses four main Ditto collections.
 
 ### `matches`
 
@@ -205,9 +207,53 @@ match_events
 
 The app shows only the events for the selected match by querying `match_events` with the active `matchId`.
 
+### `match_review_proposals`
+
+A review proposal document represents a call suggested by an assistant referee.
+
+Assistant referees can propose:
+
+- offside
+- foul
+
+The proposal syncs through Ditto as a pending document. The main referee sees the pending request, then accepts or rejects it.
+
+```text
+assistant referee proposes offside
+→ app writes a match_review_proposals document locally
+→ Ditto syncs it to the referee device
+→ referee accepts or rejects
+→ accepted proposals become official match_events
+```
+
+### `match_participants`
+
+A participant document represents the current role a device is playing in one
+match. Devices refresh this document every few seconds while the app is open.
+
+This is intentionally app-level state, not raw Ditto presence. Ditto presence
+answers “which peers are reachable?” while `match_participants` answers “is
+there a fresh main referee device for this selected match?”
+
+Example referee heartbeat:
+
+```json
+{
+  "_id": "participant-peer123-match-abc123",
+  "matchId": "match-abc123",
+  "role": "referee",
+  "deviceName": "Soccer Tracker",
+  "lastSeenMillis": 1788291234567
+}
+```
+
+The assistant referee view checks for a fresh `role: "referee"` participant on
+the same `matchId`. If none exists, the assistant can still view the match, but
+the “Send to main referee” button stays disabled.
+
 ## Role behavior
 
-The app currently has two roles:
+The app currently has three roles:
 
 ### Referee
 
@@ -221,6 +267,19 @@ The referee can:
 - record cards
 - record offsides
 - record substitutions
+- accept or reject assistant-referee review proposals
+
+### Assistant referee
+
+The assistant referee can:
+
+- select a match
+- view score and match status
+- view the event timeline
+- propose offside or foul reviews for the main referee only when a fresh referee
+  heartbeat is visible for the same match
+
+Assistant-referee proposals do not directly change the official timeline. They become official events only when the main referee accepts them.
 
 ### Spectator
 
@@ -404,7 +463,6 @@ Known limitations:
 
 - roles are UI-only, not secure permissions
 - rosters are demo/generated rosters, not user-created teams yet
-- there is no assistant-referee-specific workflow yet
 - there is no coach/statkeeper workflow yet
 - conflict-resolution tests are not fully built yet
 - there is no polished match setup wizard yet
@@ -422,10 +480,10 @@ Good next steps:
    - add real players
    - mark starters and bench players
 
-2. Assistant referee mode
-   - allow offsides and notes
-   - restrict official score changes
-   - show pending events for main-ref approval
+2. Review history
+   - show accepted and rejected assistant-referee proposals
+   - add review notes
+   - show who made and decided each request
 
 3. Coach/statkeeper mode
    - log tactical events

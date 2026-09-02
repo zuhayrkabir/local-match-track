@@ -4,13 +4,18 @@ import 'dart:math';
 import 'package:ditto_live/ditto_live.dart';
 
 import '../../ditto/ditto_manager.dart';
+import '../../domain/app_role.dart';
 import '../../domain/match_control.dart';
 import '../../domain/match_event.dart';
+import '../../domain/match_participant.dart';
+import '../../domain/match_review_proposal.dart';
 import '../../domain/player.dart';
 import '../match_event_repository.dart';
 
 class DittoMatchEventRepository implements MatchEventRepository {
   DittoMatchEventRepository(this._manager, {required this._matchId});
+
+  static const _refereeFreshnessMillis = 15000;
 
   final DittoManager _manager;
   final String _matchId;
@@ -174,6 +179,73 @@ class DittoMatchEventRepository implements MatchEventRepository {
   }
 
   @override
+  Stream<List<MatchReviewProposal>> watchPendingReviewProposals() {
+    final controller = StreamController<List<MatchReviewProposal>>();
+    late final StoreObserver observer;
+
+    Future<void> emit(QueryResult result) async {
+      final proposals =
+          result.items
+              .map((item) => MatchReviewProposal.fromJson(item.value))
+              .toList()
+            ..sort((a, b) => a.createdAtMillis.compareTo(b.createdAtMillis));
+
+      if (!controller.isClosed) {
+        controller.add(proposals);
+      }
+    }
+
+    Future<void> loadInitialProposals() async {
+      final result = await _ditto.store.execute(
+        '''
+        SELECT * FROM match_review_proposals
+        WHERE matchId = :matchId AND status = 'pending'
+        ORDER BY createdAtMillis ASC
+        ''',
+        arguments: {'matchId': _matchId},
+      );
+      await emit(result);
+    }
+
+    observer = _ditto.store.registerObserver(
+      '''
+      SELECT * FROM match_review_proposals
+      WHERE matchId = :matchId AND status = 'pending'
+      ORDER BY createdAtMillis ASC
+      ''',
+      arguments: {'matchId': _matchId},
+      onChange: (result) {
+        unawaited(emit(result));
+      },
+    );
+
+    unawaited(loadInitialProposals());
+
+    controller.onCancel = observer.cancel;
+    return controller.stream;
+  }
+
+  @override
+  Stream<bool> watchRefereeOnline() async* {
+    while (true) {
+      final cutoff =
+          DateTime.now().millisecondsSinceEpoch - _refereeFreshnessMillis;
+      final result = await _ditto.store.execute(
+        '''
+        SELECT * FROM match_participants
+        WHERE matchId = :matchId
+          AND role = 'referee'
+          AND lastSeenMillis >= :cutoff
+        ''',
+        arguments: {'matchId': _matchId, 'cutoff': cutoff},
+      );
+
+      yield result.items.isNotEmpty;
+      await Future<void>.delayed(const Duration(seconds: 3));
+    }
+  }
+
+  @override
   Future<MatchControlState> createMatch() async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final match = MatchControlState.initial(
@@ -192,6 +264,14 @@ class DittoMatchEventRepository implements MatchEventRepository {
   Future<void> deleteMatch(String matchId) async {
     await _ditto.store.execute(
       'DELETE FROM match_events WHERE matchId = :matchId',
+      arguments: {'matchId': matchId},
+    );
+    await _ditto.store.execute(
+      'DELETE FROM match_review_proposals WHERE matchId = :matchId',
+      arguments: {'matchId': matchId},
+    );
+    await _ditto.store.execute(
+      'DELETE FROM match_participants WHERE matchId = :matchId',
       arguments: {'matchId': matchId},
     );
     await _ditto.store.execute(
@@ -341,6 +421,86 @@ class DittoMatchEventRepository implements MatchEventRepository {
     );
   }
 
+  @override
+  Future<void> proposeReview({
+    required MatchEventType type,
+    required TeamSide teamSide,
+    DemoPlayer? player,
+  }) async {
+    if (type != MatchEventType.offside && type != MatchEventType.foul) {
+      throw ArgumentError(
+        'Assistant reviews can only propose offside or foul.',
+      );
+    }
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final match = await _readMatchControl();
+    await _saveReviewProposal(
+      MatchReviewProposal(
+        id: _newReviewProposalId(now),
+        matchId: _matchId,
+        type: type,
+        teamSide: teamSide,
+        teamName: teamNameForSide(teamSide),
+        minute: match.matchMinuteAt(now),
+        createdAtMillis: now,
+        updatedAtMillis: now,
+        status: MatchReviewProposalStatus.pending,
+        playerId: player?.id,
+        playerName: player?.name,
+        playerNumber: player?.number,
+      ),
+    );
+  }
+
+  @override
+  Future<void> acceptReviewProposal(MatchReviewProposal proposal) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await _insertEvent(
+      proposal.toAcceptedEvent(id: _newEventId(now), createdAtMillis: now),
+    );
+    await _saveReviewProposal(
+      proposal.copyWith(
+        status: MatchReviewProposalStatus.accepted,
+        updatedAtMillis: now,
+        decidedAtMillis: now,
+      ),
+    );
+  }
+
+  @override
+  Future<void> rejectReviewProposal(MatchReviewProposal proposal) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await _saveReviewProposal(
+      proposal.copyWith(
+        status: MatchReviewProposalStatus.rejected,
+        updatedAtMillis: now,
+        decidedAtMillis: now,
+      ),
+    );
+  }
+
+  @override
+  Future<void> publishParticipantHeartbeat(AppRole role) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final peerKey = _ditto.presence.graph.localPeer.peerKey.toString();
+    final participant = MatchParticipant(
+      id: 'participant-$peerKey-$_matchId',
+      matchId: _matchId,
+      role: role,
+      deviceName: _ditto.deviceName,
+      lastSeenMillis: now,
+    );
+
+    await _ditto.store.execute(
+      '''
+      INSERT INTO match_participants DOCUMENTS (:participant)
+      ON ID CONFLICT DO UPDATE_LOCAL_DIFF
+      ''',
+      arguments: {'participant': participant.toJson()},
+    );
+  }
+
   Future<MatchControlState> _readMatchControl() async {
     final result = await _ditto.store.execute(
       'SELECT * FROM matches WHERE _id = :matchId',
@@ -373,5 +533,18 @@ class DittoMatchEventRepository implements MatchEventRepository {
     );
   }
 
+  Future<void> _saveReviewProposal(MatchReviewProposal proposal) async {
+    await _ditto.store.execute(
+      '''
+      INSERT INTO match_review_proposals DOCUMENTS (:proposal)
+      ON ID CONFLICT DO UPDATE_LOCAL_DIFF
+      ''',
+      arguments: {'proposal': proposal.toJson()},
+    );
+  }
+
   String _newEventId(int now) => 'event-$now-${Random().nextInt(100000)}';
+
+  String _newReviewProposalId(int now) =>
+      'review-$now-${Random().nextInt(100000)}';
 }

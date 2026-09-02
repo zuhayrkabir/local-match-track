@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +8,7 @@ import '../../design/match_center_tokens.dart';
 import '../../domain/app_role.dart';
 import '../../domain/match_control.dart';
 import '../../domain/match_event.dart';
+import '../../domain/match_review_proposal.dart';
 import '../../domain/player.dart';
 import '../../ditto/ditto_manager.dart';
 import '../ditto_tools/ditto_tools_entry.dart';
@@ -25,6 +28,18 @@ class _MatchEventsScreenState extends ConsumerState<MatchEventsScreen> {
   TeamSide _selectedSubstitutionTeamSide = TeamSide.home;
   DemoPlayer _selectedPlayerOut = demoStartersForSide(TeamSide.home).first;
   DemoPlayer _selectedPlayerIn = demoBenchPlayersForSide(TeamSide.home).first;
+  MatchEventType _selectedReviewType = MatchEventType.offside;
+  TeamSide _selectedReviewTeamSide = TeamSide.home;
+  DemoPlayer _selectedReviewPlayer = demoPlayersForSide(TeamSide.home).first;
+  final Set<String> _shownReviewProposalIds = {};
+  Timer? _participantHeartbeatTimer;
+  String? _participantHeartbeatKey;
+
+  @override
+  void dispose() {
+    _participantHeartbeatTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,10 +47,18 @@ class _MatchEventsScreenState extends ConsumerState<MatchEventsScreen> {
     final managerState = ref.watch(dittoManagerProvider);
     final matchesState = ref.watch(matchesProvider);
     final matchControlState = ref.watch(matchControlProvider);
-    final eventsState = ref.watch(matchEventsProvider);
     final allEventsState = ref.watch(allMatchEventsProvider);
+    final pendingReviewProposalsState = ref.watch(
+      pendingReviewProposalsProvider,
+    );
+    final refereeOnlineState = ref.watch(refereeOnlineProvider);
     final presenceState = ref.watch(dittoPresenceSummaryProvider);
     final showDashboard = ref.watch(showDashboardProvider);
+    final selectedMatchId = ref.watch(selectedMatchIdProvider);
+    final selectedEventsState = allEventsState.whenData((events) {
+      return events.where((event) => event.matchId == selectedMatchId).toList()
+        ..sort((a, b) => a.createdAtMillis.compareTo(b.createdAtMillis));
+    });
     final canWrite =
         (managerState.valueOrNull?.dataAccessReady ?? false) &&
         (selectedRole?.canWriteMatch ?? false);
@@ -49,6 +72,12 @@ class _MatchEventsScreenState extends ConsumerState<MatchEventsScreen> {
     }
 
     final compactAppBar = MediaQuery.sizeOf(context).width < 520;
+    _configureParticipantHeartbeat(
+      selectedRole,
+      selectedMatchId,
+      managerState.valueOrNull?.dataAccessReady ?? false,
+    );
+    _queueReviewProposalPopup(selectedRole, pendingReviewProposalsState);
 
     return Scaffold(
       appBar: AppBar(
@@ -65,18 +94,14 @@ class _MatchEventsScreenState extends ConsumerState<MatchEventsScreen> {
             },
             icon: const Icon(Icons.switch_account),
           ),
-          const _ThemeModeButton(),
         ],
       ),
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Theme.of(context).colorScheme.primary.withValues(alpha: 0.18),
-              Theme.of(context).scaffoldBackgroundColor,
-            ],
+            colors: [Color(0xFF182A12), MatchCenterColors.pitchBlack],
           ),
         ),
         padding: const EdgeInsets.all(16),
@@ -95,10 +120,9 @@ class _MatchEventsScreenState extends ConsumerState<MatchEventsScreen> {
                 matchesState: matchesState,
                 allEventsState: allEventsState,
                 presenceState: presenceState,
-                selectedMatchId: ref.watch(selectedMatchIdProvider),
+                selectedMatchId: selectedMatchId,
                 onMatchSelected: (matchId) {
                   ref.read(selectedMatchIdProvider.notifier).state = matchId;
-                  ref.read(showDashboardProvider.notifier).state = false;
                 },
                 onCreateMatch: _createMatch,
               )
@@ -109,14 +133,14 @@ class _MatchEventsScreenState extends ConsumerState<MatchEventsScreen> {
               ),
               const SizedBox(height: 16),
               _MatchHero(
-                eventsState: eventsState,
+                eventsState: selectedEventsState,
                 matchControlState: matchControlState,
               ),
               const SizedBox(height: 16),
               _MatchSessionCard(
                 canWrite: canWrite,
                 matchesState: matchesState,
-                selectedMatchId: ref.watch(selectedMatchIdProvider),
+                selectedMatchId: selectedMatchId,
                 onMatchSelected: (matchId) {
                   if (matchId == null) return;
                   ref.read(selectedMatchIdProvider.notifier).state = matchId;
@@ -125,6 +149,14 @@ class _MatchEventsScreenState extends ConsumerState<MatchEventsScreen> {
                 onDeleteMatch: _deleteSelectedMatch,
               ),
               const SizedBox(height: 16),
+              if (selectedRole.canReviewProposals) ...[
+                _ReviewRequestsPanel(
+                  proposalsState: pendingReviewProposalsState,
+                  onAccept: _acceptReviewProposal,
+                  onReject: _rejectReviewProposal,
+                ),
+                const SizedBox(height: 16),
+              ],
               if (selectedRole.canWriteMatch) ...[
                 _MatchControlCard(
                   canWrite: canWrite,
@@ -181,17 +213,48 @@ class _MatchEventsScreenState extends ConsumerState<MatchEventsScreen> {
                   },
                   onLogSubstitution: _logSubstitution,
                 ),
+              ] else if (selectedRole.canProposeReviews) ...[
+                _AssistantReviewProposalCard(
+                  dittoReady:
+                      managerState.valueOrNull?.dataAccessReady ?? false,
+                  refereeOnlineState: refereeOnlineState,
+                  selectedReviewType: _selectedReviewType,
+                  selectedTeamSide: _selectedReviewTeamSide,
+                  selectedPlayer: _selectedReviewPlayer,
+                  onReviewTypeChanged: (type) {
+                    if (type == null) return;
+                    setState(() => _selectedReviewType = type);
+                  },
+                  onTeamChanged: (teamSide) {
+                    if (teamSide == null) return;
+                    setState(() {
+                      _selectedReviewTeamSide = teamSide;
+                      _selectedReviewPlayer = demoPlayersForSide(teamSide)
+                          .first;
+                    });
+                  },
+                  onPlayerChanged: (player) {
+                    if (player == null) return;
+                    setState(() => _selectedReviewPlayer = player);
+                  },
+                  onProposeReview: _proposeReview,
+                ),
               ] else
                 const _SpectatorNotice(),
               const SizedBox(height: 16),
               const _RosterCard(),
               const SizedBox(height: 16),
               Text(
-                'Match timeline',
-                style: Theme.of(context).textTheme.titleMedium,
+                'MATCH TIMELINE',
+                style: MatchCenterTypography.label(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                  color: MatchCenterColors.lime,
+                  letterSpacing: 1.6,
+                ),
               ),
               const SizedBox(height: 8),
-              eventsState.when(
+              selectedEventsState.when(
                 data: (events) => _EventList(events: events),
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (error, _) => _ErrorText(error: error),
@@ -311,10 +374,127 @@ class _MatchEventsScreenState extends ConsumerState<MatchEventsScreen> {
     }
   }
 
+  Future<void> _proposeReview() async {
+    final repository = await ref.read(matchEventRepositoryProvider.future);
+    try {
+      await repository.proposeReview(
+        type: _selectedReviewType,
+        teamSide: _selectedReviewTeamSide,
+        player: _selectedReviewPlayer,
+      );
+      _showSnackBar('Review sent to the main referee.');
+    } catch (error) {
+      _showSnackBar('Could not propose review: $error');
+    }
+  }
+
+  Future<void> _acceptReviewProposal(MatchReviewProposal proposal) async {
+    final repository = await ref.read(matchEventRepositoryProvider.future);
+    try {
+      await repository.acceptReviewProposal(proposal);
+      _showSnackBar('Accepted ${proposal.label.toLowerCase()}.');
+    } catch (error) {
+      _showSnackBar('Could not accept review: $error');
+    }
+  }
+
+  Future<void> _rejectReviewProposal(MatchReviewProposal proposal) async {
+    final repository = await ref.read(matchEventRepositoryProvider.future);
+    try {
+      await repository.rejectReviewProposal(proposal);
+      _showSnackBar('Rejected ${proposal.label.toLowerCase()}.');
+    } catch (error) {
+      _showSnackBar('Could not reject review: $error');
+    }
+  }
+
+  void _configureParticipantHeartbeat(
+    AppRole role,
+    String matchId,
+    bool dittoReady,
+  ) {
+    final heartbeatKey = '$dittoReady|${role.name}|$matchId';
+    if (_participantHeartbeatKey == heartbeatKey) return;
+
+    _participantHeartbeatKey = heartbeatKey;
+    _participantHeartbeatTimer?.cancel();
+    _participantHeartbeatTimer = null;
+
+    if (!dittoReady) return;
+
+    _publishParticipantHeartbeat(role);
+    _participantHeartbeatTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _publishParticipantHeartbeat(role),
+    );
+  }
+
+  Future<void> _publishParticipantHeartbeat(AppRole role) async {
+    try {
+      final repository = await ref.read(matchEventRepositoryProvider.future);
+      await repository.publishParticipantHeartbeat(role);
+    } catch (_) {
+      // Ditto startup and auth errors are already shown in the status card.
+      // Heartbeat failures should not interrupt read-only match viewing.
+    }
+  }
+
   void _showSnackBar(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _queueReviewProposalPopup(
+    AppRole selectedRole,
+    AsyncValue<List<MatchReviewProposal>> proposalsState,
+  ) {
+    if (!selectedRole.canReviewProposals) return;
+    final proposals = proposalsState.valueOrNull;
+    if (proposals == null || proposals.isEmpty) return;
+
+    final unseenProposals = proposals.where(
+      (proposal) => !_shownReviewProposalIds.contains(proposal.id),
+    );
+    if (unseenProposals.isEmpty) return;
+
+    final proposal = unseenProposals.first;
+    _shownReviewProposalIds.add(proposal.id);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _showReviewProposalDialog(proposal);
+    });
+  }
+
+  Future<void> _showReviewProposalDialog(MatchReviewProposal proposal) async {
+    final decision = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Assistant referee review'),
+          content: Text(
+            '${proposal.label}\n'
+            'Minute ${proposal.minute} • ${proposal.subjectLabel}',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Reject'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Accept'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (decision == true) {
+      await _acceptReviewProposal(proposal);
+    } else if (decision == false) {
+      await _rejectReviewProposal(proposal);
+    }
   }
 }
 
@@ -326,10 +506,7 @@ class _RoleSelectionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Choose match role'),
-        actions: const [_ThemeModeButton()],
-      ),
+      appBar: AppBar(title: const Text('Choose match role')),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -439,10 +616,7 @@ class _RoleOptionCard extends StatelessWidget {
                   color: MatchCenterColors.lime.withValues(alpha: 0.16),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  role == AppRole.referee ? Icons.sports : Icons.visibility,
-                  color: MatchCenterColors.lime,
-                ),
+                child: Icon(_iconForRole(role), color: MatchCenterColors.lime),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -491,15 +665,20 @@ class _RoleBadge extends StatelessWidget {
         padding: const EdgeInsets.only(right: 4),
         child: Chip(
           visualDensity: VisualDensity.compact,
-          avatar: Icon(
-            role == AppRole.referee ? Icons.sports : Icons.visibility,
-            size: 18,
-          ),
+          avatar: Icon(_iconForRole(role), size: 18),
           label: compact ? const SizedBox.shrink() : Text(role.label),
         ),
       ),
     );
   }
+}
+
+IconData _iconForRole(AppRole role) {
+  return switch (role) {
+    AppRole.referee => Icons.sports,
+    AppRole.assistantReferee => Icons.assistant_direction,
+    AppRole.spectator => Icons.visibility,
+  };
 }
 
 class _ViewSwitcher extends StatelessWidget {
@@ -532,6 +711,60 @@ class _ViewSwitcher extends StatelessWidget {
   }
 }
 
+class _DetailPanel extends StatelessWidget {
+  const _DetailPanel({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: MatchCenterColors.panel,
+        border: Border.all(color: MatchCenterColors.borderBright),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.22),
+            blurRadius: 18,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: child,
+    );
+  }
+}
+
+class _DetailHeader extends StatelessWidget {
+  const _DetailHeader({required this.icon, required this.title});
+
+  final IconData icon;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: MatchCenterColors.lime),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            title.toUpperCase(),
+            style: MatchCenterTypography.label(
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              color: MatchCenterColors.lime,
+              letterSpacing: 1.5,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _MatchSessionCard extends StatelessWidget {
   const _MatchSessionCard({
     required this.canWrite,
@@ -551,70 +784,66 @@ class _MatchSessionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.event_available,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Match session',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            matchesState.when(
-              data: (matches) {
-                final visibleMatches = _ensureSelectedMatchExists(matches);
-                return DropdownButtonFormField<String>(
-                  initialValue:
-                      visibleMatches.any((match) => match.id == selectedMatchId)
-                      ? selectedMatchId
-                      : visibleMatches.first.id,
-                  decoration: const InputDecoration(labelText: 'Current match'),
-                  items: [
-                    for (final match in visibleMatches)
-                      DropdownMenuItem(
-                        value: match.id,
-                        child: Text('${match.name} • ${match.statusLabel}'),
+    return _DetailPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _DetailHeader(
+            icon: Icons.event_available,
+            title: 'Match session',
+          ),
+          const SizedBox(height: 12),
+          matchesState.when(
+            data: (matches) {
+              final visibleMatches = _ensureSelectedMatchExists(matches);
+              return DropdownButtonFormField<String>(
+                isExpanded: true,
+                initialValue:
+                    visibleMatches.any((match) => match.id == selectedMatchId)
+                    ? selectedMatchId
+                    : visibleMatches.first.id,
+                decoration: const InputDecoration(labelText: 'Current match'),
+                items: [
+                  for (final match in visibleMatches)
+                    DropdownMenuItem(
+                      value: match.id,
+                      child: Text(
+                        '${match.name} • ${match.statusLabel}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                  ],
-                  onChanged: onMatchSelected,
-                );
-              },
-              loading: () => const LinearProgressIndicator(),
-              error: (error, _) => _ErrorText(error: error),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              children: [
-                FilledButton.icon(
-                  onPressed: canWrite ? onCreateMatch : null,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Create new match'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: canWrite ? onDeleteMatch : null,
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text('Delete current match'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.error,
+                    ),
+                ],
+                onChanged: onMatchSelected,
+              );
+            },
+            loading: () => const LinearProgressIndicator(),
+            error: (error, _) => _ErrorText(error: error),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              FilledButton.icon(
+                onPressed: canWrite ? onCreateMatch : null,
+                icon: const Icon(Icons.add),
+                label: const Text('Create new match'),
+              ),
+              OutlinedButton.icon(
+                onPressed: canWrite ? onDeleteMatch : null,
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Delete current match'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: MatchCenterColors.danger,
+                  side: BorderSide(
+                    color: MatchCenterColors.danger.withValues(alpha: 0.55),
                   ),
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -634,54 +863,21 @@ class _SpectatorNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              Icons.visibility,
-              color: Theme.of(context).colorScheme.primary,
+    return _DetailPanel(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.visibility, color: MatchCenterColors.lime),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Spectator mode: this device can view the live score, clock, '
+              'match session, roster, and timeline, but cannot change the match.',
+              style: MatchCenterTypography.body(fontSize: 14, height: 1.45),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Spectator mode: this device can view the live score, clock, '
-                'match session, roster, and timeline, but cannot change the match.',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
-}
-
-class _ThemeModeButton extends ConsumerWidget {
-  const _ThemeModeButton();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final mode = ref.watch(themeModeProvider);
-    final nextMode = switch (mode) {
-      ThemeMode.system => ThemeMode.light,
-      ThemeMode.light => ThemeMode.dark,
-      ThemeMode.dark => ThemeMode.system,
-    };
-    final icon = switch (mode) {
-      ThemeMode.system => Icons.brightness_auto,
-      ThemeMode.light => Icons.light_mode,
-      ThemeMode.dark => Icons.dark_mode,
-    };
-
-    return IconButton(
-      tooltip: 'Change theme',
-      onPressed: () {
-        ref.read(themeModeProvider.notifier).state = nextMode;
-      },
-      icon: Icon(icon),
     );
   }
 }
@@ -703,72 +899,88 @@ class _MatchHero extends StatelessWidget {
     final matchControl = matchControlState.valueOrNull;
     final status = matchControl?.statusLabel ?? 'Waiting for match state';
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Theme.of(context).colorScheme.primary,
-              Theme.of(context).colorScheme.secondary,
-            ],
-          ),
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: const Icon(
-                    Icons.sports_soccer,
-                    color: Colors.white,
-                    size: 32,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  'LIVE DEMO',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Green FC vs White FC',
-              style: Theme.of(context).textTheme.headlineSmall
-                  ?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '$greenGoals - $whiteGoals',
-              style: Theme.of(context).textTheme.displaySmall
-                  ?.copyWith(color: Colors.white, fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '$status • Score is derived from synced goal events.',
-              style: Theme.of(context).textTheme.bodyMedium
-                  ?.copyWith(color: Colors.white.withValues(alpha: 0.86)),
-            ),
-            if (matchControl != null) ...[
-              const SizedBox(height: 16),
-              _MatchClockPill(matchControl: matchControl),
-            ],
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(30),
+        gradient: const RadialGradient(
+          center: Alignment.topLeft,
+          radius: 1.45,
+          colors: [
+            MatchCenterColors.featuredTop,
+            MatchCenterColors.panel,
+            MatchCenterColors.featuredBottom,
           ],
         ),
+        border: Border.all(color: MatchCenterColors.borderBright),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.3),
+            blurRadius: 24,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: MatchCenterColors.lime.withValues(alpha: 0.14),
+                  border: Border.all(
+                    color: MatchCenterColors.lime.withValues(alpha: 0.32),
+                  ),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Icon(
+                  Icons.sports_soccer,
+                  color: MatchCenterColors.lime,
+                  size: 30,
+                ),
+              ),
+              const Spacer(),
+              const BroadcastLiveBadge(label: 'LIVE DEMO'),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Green FC vs White FC',
+            style: MatchCenterTypography.display(
+              fontSize: 34,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+              letterSpacing: -1.2,
+              height: 1.02,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '$greenGoals - $whiteGoals',
+            style: MatchCenterTypography.display(
+              fontSize: 76,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
+              letterSpacing: -3.8,
+              height: 0.9,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '$status • Score is derived from synced goal events.',
+            style: MatchCenterTypography.body(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: MatchCenterColors.offWhite.withValues(alpha: 0.86),
+            ),
+          ),
+          if (matchControl != null) ...[
+            const SizedBox(height: 16),
+            _MatchClockPill(matchControl: matchControl),
+          ],
+        ],
       ),
     );
   }
@@ -803,25 +1015,29 @@ class _MatchClockPill extends StatelessWidget {
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.16),
+            color: Colors.black.withValues(alpha: 0.28),
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
+            border: Border.all(color: MatchCenterColors.borderBright),
           ),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 matchControl.isHalfRunning ? Icons.timer : Icons.timer_off,
-                color: Colors.white,
+                color: MatchCenterColors.lime,
                 size: 18,
               ),
               const SizedBox(width: 8),
-              Text(
-                '${matchControl.clockLabelAt(now)}'
-                ' • Match minute ${matchControl.matchMinuteAt(now)}',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
+              Flexible(
+                child: Text(
+                  '${matchControl.clockLabelAt(now)}'
+                  ' • Match minute ${matchControl.matchMinuteAt(now)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: MatchCenterTypography.label(
+                    fontSize: 13,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ],
@@ -851,62 +1067,60 @@ class _MatchControlCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = matchControlState.valueOrNull ?? MatchControlState.initial();
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.timer, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(
-                  'Main referee controls',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ],
+    return _DetailPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _DetailHeader(
+            icon: Icons.timer,
+            title: 'Main referee controls',
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Current state: ${state.statusLabel}',
+            style: MatchCenterTypography.body(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: MatchCenterColors.offWhite,
             ),
-            const SizedBox(height: 8),
-            Text('Current state: ${state.statusLabel}'),
-            const SizedBox(height: 12),
-            SegmentedButton<MatchHalf>(
-              segments: const [
-                ButtonSegment(
-                  value: MatchHalf.first,
-                  label: Text('First half'),
-                  icon: Icon(Icons.looks_one),
-                ),
-                ButtonSegment(
-                  value: MatchHalf.second,
-                  label: Text('Second half'),
-                  icon: Icon(Icons.looks_two),
-                ),
-              ],
-              selected: {state.selectedHalf},
-              onSelectionChanged: canWrite
-                  ? (selection) => onSelectHalf(selection.first)
-                  : null,
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              children: [
-                FilledButton.icon(
-                  onPressed: canWrite ? onStartHalf : null,
-                  icon: const Icon(Icons.play_arrow),
-                  label: Text('Start ${state.selectedHalfLabel}'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: canWrite ? onEndHalf : null,
-                  icon: const Icon(Icons.stop),
-                  label: const Text('End half'),
-                ),
-              ],
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 12),
+          SegmentedButton<MatchHalf>(
+            segments: const [
+              ButtonSegment(
+                value: MatchHalf.first,
+                label: Text('First half'),
+                icon: Icon(Icons.looks_one),
+              ),
+              ButtonSegment(
+                value: MatchHalf.second,
+                label: Text('Second half'),
+                icon: Icon(Icons.looks_two),
+              ),
+            ],
+            selected: {state.selectedHalf},
+            onSelectionChanged: canWrite
+                ? (selection) => onSelectHalf(selection.first)
+                : null,
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              FilledButton.icon(
+                onPressed: canWrite ? onStartHalf : null,
+                icon: const Icon(Icons.play_arrow),
+                label: Text('Start ${state.selectedHalfLabel}'),
+              ),
+              OutlinedButton.icon(
+                onPressed: canWrite ? onEndHalf : null,
+                icon: const Icon(Icons.stop),
+                label: const Text('End half'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -942,73 +1156,359 @@ class _OfficialEventCard extends StatelessWidget {
       MatchEventType.offside,
     ];
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    return _DetailPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _DetailHeader(
+            icon: Icons.edit_note,
+            title: 'Log official event',
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<MatchEventType>(
+            initialValue: selectedEventType,
+            decoration: const InputDecoration(labelText: 'Event'),
+            items: [
+              for (final type in officialEventTypes)
+                DropdownMenuItem(value: type, child: Text(type.label)),
+            ],
+            onChanged: canWrite ? onEventTypeChanged : null,
+          ),
+          const SizedBox(height: 12),
+          SegmentedButton<TeamSide>(
+            segments: [
+              for (final teamSide in TeamSide.values)
+                ButtonSegment(
+                  value: teamSide,
+                  label: Text(teamNameForSide(teamSide)),
+                  icon: Icon(
+                    teamSide == TeamSide.home ? Icons.shield : Icons.flag,
+                  ),
+                ),
+            ],
+            selected: {selectedTeamSide},
+            onSelectionChanged: canWrite
+                ? (selection) => onTeamChanged(selection.first)
+                : null,
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<DemoPlayer>(
+            initialValue: selectedPlayer,
+            decoration: const InputDecoration(labelText: 'Player involved'),
+            items: [
+              for (final player in demoPlayersForSide(selectedTeamSide))
+                DropdownMenuItem(
+                  value: player,
+                  child: Text(player.rosterLabel),
+                ),
+            ],
+            onChanged: canWrite ? onPlayerChanged : null,
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: canWrite ? onLogEvent : null,
+            icon: const Icon(Icons.add_circle),
+            label: const Text('Log event'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AssistantReviewProposalCard extends StatelessWidget {
+  const _AssistantReviewProposalCard({
+    required this.dittoReady,
+    required this.refereeOnlineState,
+    required this.selectedReviewType,
+    required this.selectedTeamSide,
+    required this.selectedPlayer,
+    required this.onReviewTypeChanged,
+    required this.onTeamChanged,
+    required this.onPlayerChanged,
+    required this.onProposeReview,
+  });
+
+  final bool dittoReady;
+  final AsyncValue<bool> refereeOnlineState;
+  final MatchEventType selectedReviewType;
+  final TeamSide selectedTeamSide;
+  final DemoPlayer selectedPlayer;
+  final ValueChanged<MatchEventType?> onReviewTypeChanged;
+  final ValueChanged<TeamSide?> onTeamChanged;
+  final ValueChanged<DemoPlayer?> onPlayerChanged;
+  final VoidCallback onProposeReview;
+
+  @override
+  Widget build(BuildContext context) {
+    const reviewTypes = [MatchEventType.offside, MatchEventType.foul];
+    final refereeOnline = refereeOnlineState.valueOrNull ?? false;
+    final canPropose = dittoReady && refereeOnline;
+    final statusIcon = canPropose ? Icons.verified : Icons.lock_clock;
+    final statusColor = canPropose
+        ? MatchCenterColors.grass
+        : MatchCenterColors.caution;
+    final statusMessage = !dittoReady
+        ? 'Ditto is still starting. You can view the match once local data is ready.'
+        : refereeOnline
+        ? 'Main referee online. You can send review proposals for this match.'
+        : 'You can view the match, but cannot send review proposals until a referee is online.';
+
+    return _DetailPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _DetailHeader(
+            icon: Icons.assistant_direction,
+            title: 'Assistant review proposal',
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Suggest a call without changing the official timeline. The main '
+            'referee accepts or rejects it from their device.',
+            style: MatchCenterTypography.body(fontSize: 13, height: 1.45),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.10),
+              border: Border.all(color: statusColor.withValues(alpha: 0.38)),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.edit_note,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Log official event',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<MatchEventType>(
-              initialValue: selectedEventType,
-              decoration: const InputDecoration(labelText: 'Event'),
-              items: [
-                for (final type in officialEventTypes)
-                  DropdownMenuItem(value: type, child: Text(type.label)),
-              ],
-              onChanged: canWrite ? onEventTypeChanged : null,
-            ),
-            const SizedBox(height: 12),
-            SegmentedButton<TeamSide>(
-              segments: [
-                for (final teamSide in TeamSide.values)
-                  ButtonSegment(
-                    value: teamSide,
-                    label: Text(teamNameForSide(teamSide)),
-                    icon: Icon(
-                      teamSide == TeamSide.home ? Icons.shield : Icons.flag,
+                Icon(statusIcon, color: statusColor, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    statusMessage,
+                    style: MatchCenterTypography.body(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      height: 1.35,
                     ),
                   ),
+                ),
               ],
-              selected: {selectedTeamSide},
-              onSelectionChanged: canWrite
-                  ? (selection) => onTeamChanged(selection.first)
-                  : null,
             ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<DemoPlayer>(
-              initialValue: selectedPlayer,
-              decoration: const InputDecoration(labelText: 'Player involved'),
-              items: [
-                for (final player in demoPlayersForSide(selectedTeamSide))
-                  DropdownMenuItem(
-                    value: player,
-                    child: Text(player.rosterLabel),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<MatchEventType>(
+            initialValue: selectedReviewType,
+            decoration: const InputDecoration(labelText: 'Review type'),
+            items: [
+              for (final type in reviewTypes)
+                DropdownMenuItem(value: type, child: Text(type.label)),
+            ],
+            onChanged: canPropose ? onReviewTypeChanged : null,
+          ),
+          const SizedBox(height: 12),
+          SegmentedButton<TeamSide>(
+            segments: [
+              for (final teamSide in TeamSide.values)
+                ButtonSegment(
+                  value: teamSide,
+                  label: Text(teamNameForSide(teamSide)),
+                  icon: Icon(
+                    teamSide == TeamSide.home ? Icons.shield : Icons.flag,
                   ),
+                ),
+            ],
+            selected: {selectedTeamSide},
+            onSelectionChanged: canPropose
+                ? (selection) => onTeamChanged(selection.first)
+                : null,
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<DemoPlayer>(
+            initialValue: selectedPlayer,
+            decoration: const InputDecoration(labelText: 'Player involved'),
+            items: [
+              for (final player in demoPlayersForSide(selectedTeamSide))
+                DropdownMenuItem(
+                  value: player,
+                  child: Text(player.rosterLabel),
+                ),
+            ],
+            onChanged: canPropose ? onPlayerChanged : null,
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: canPropose ? onProposeReview : null,
+            icon: const Icon(Icons.send),
+            label: const Text('Send to main referee'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReviewRequestsPanel extends StatelessWidget {
+  const _ReviewRequestsPanel({
+    required this.proposalsState,
+    required this.onAccept,
+    required this.onReject,
+  });
+
+  final AsyncValue<List<MatchReviewProposal>> proposalsState;
+  final ValueChanged<MatchReviewProposal> onAccept;
+  final ValueChanged<MatchReviewProposal> onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    return proposalsState.when(
+      data: (proposals) {
+        if (proposals.isEmpty) {
+          return _DetailPanel(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.verified, color: MatchCenterColors.grass),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'No assistant referee reviews pending.',
+                    style: MatchCenterTypography.body(fontSize: 14),
+                  ),
+                ),
               ],
-              onChanged: canWrite ? onPlayerChanged : null,
             ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: canWrite ? onLogEvent : null,
-              icon: const Icon(Icons.add_circle),
-              label: const Text('Log event'),
+          );
+        }
+
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(26),
+            gradient: const RadialGradient(
+              center: Alignment.topLeft,
+              radius: 1.35,
+              colors: [
+                Color(0xFF3B2F10),
+                MatchCenterColors.panel,
+                MatchCenterColors.pitchBlack,
+              ],
             ),
-          ],
-        ),
+            border: Border.all(color: MatchCenterColors.caution, width: 1.3),
+            boxShadow: [
+              BoxShadow(
+                color: MatchCenterColors.caution.withValues(alpha: 0.13),
+                blurRadius: 28,
+                offset: const Offset(0, 16),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _DetailHeader(
+                icon: Icons.notification_important,
+                title: 'Assistant referee review',
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'A synced review request is waiting for the main referee.',
+                style: MatchCenterTypography.body(fontSize: 13, height: 1.4),
+              ),
+              const SizedBox(height: 12),
+              for (final proposal in proposals) ...[
+                _ReviewProposalTile(
+                  proposal: proposal,
+                  onAccept: () => onAccept(proposal),
+                  onReject: () => onReject(proposal),
+                ),
+                if (proposal != proposals.last) const SizedBox(height: 10),
+              ],
+            ],
+          ),
+        );
+      },
+      loading: () => const LinearProgressIndicator(),
+      error: (error, _) => _ErrorText(error: error),
+    );
+  }
+}
+
+class _ReviewProposalTile extends StatelessWidget {
+  const _ReviewProposalTile({
+    required this.proposal,
+    required this.onAccept,
+    required this.onReject,
+  });
+
+  final MatchReviewProposal proposal;
+  final VoidCallback onAccept;
+  final VoidCallback onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.28),
+        border: Border.all(color: MatchCenterColors.borderBright),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: _eventColor(proposal.type)
+                    .withValues(alpha: 0.18),
+                foregroundColor: _eventColor(proposal.type),
+                child: Icon(
+                  proposal.type == MatchEventType.offside
+                      ? Icons.flag
+                      : Icons.sports,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      proposal.label,
+                      style: MatchCenterTypography.body(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: MatchCenterColors.offWhite,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Minute ${proposal.minute} • ${proposal.subjectLabel}',
+                      style: MatchCenterTypography.body(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            children: [
+              FilledButton.icon(
+                onPressed: onAccept,
+                icon: const Icon(Icons.check),
+                label: const Text('Accept'),
+              ),
+              OutlinedButton.icon(
+                onPressed: onReject,
+                icon: const Icon(Icons.close),
+                label: const Text('Reject'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1199,43 +1699,49 @@ class _DittoStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Ditto 5.1 status',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            managerState.when(
-              data: (manager) => Text(
-                '${manager.modeLabel}\n'
-                '${manager.activationMessage}',
+    return _DetailPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _DetailHeader(icon: Icons.hub, title: 'Ditto 5.1 status'),
+          const SizedBox(height: 10),
+          managerState.when(
+            data: (manager) => Text(
+              '${manager.modeLabel}\n'
+              '${manager.activationMessage}',
+              style: MatchCenterTypography.body(
+                fontSize: 14,
+                height: 1.45,
+                color: MatchCenterColors.offWhite,
               ),
-              loading: () => const Text('Opening Ditto...'),
-              error: (error, _) => _ErrorText(error: error),
             ),
-            const SizedBox(height: 8),
-            presenceState.when(
-              data: (summary) => Text(
-                'Device: ${summary.localPeerName}\n'
-                'Remote peers visible: ${summary.remotePeerCount}\n'
-                'Connected to Ditto Server: ${summary.connectedToDittoServer}',
-              ),
-              loading: () => const Text('Waiting for presence graph...'),
-              error: (error, _) => _ErrorText(error: error),
+            loading: () => Text(
+              'Opening Ditto...',
+              style: MatchCenterTypography.body(fontSize: 14),
             ),
-            const SizedBox(height: 12),
-            managerState.when(
-              data: (manager) => DittoToolsButton(manager: manager),
-              loading: () => const SizedBox.shrink(),
-              error: (_, _) => const SizedBox.shrink(),
+            error: (error, _) => _ErrorText(error: error),
+          ),
+          const SizedBox(height: 10),
+          presenceState.when(
+            data: (summary) => Text(
+              'Device: ${summary.localPeerName}\n'
+              'Remote peers visible: ${summary.remotePeerCount}\n'
+              'Connected to Ditto Server: ${summary.connectedToDittoServer}',
+              style: MatchCenterTypography.body(fontSize: 14, height: 1.45),
             ),
-          ],
-        ),
+            loading: () => Text(
+              'Waiting for presence graph...',
+              style: MatchCenterTypography.body(fontSize: 14),
+            ),
+            error: (error, _) => _ErrorText(error: error),
+          ),
+          const SizedBox(height: 12),
+          managerState.when(
+            data: (manager) => DittoToolsButton(manager: manager),
+            loading: () => const SizedBox.shrink(),
+            error: (_, _) => const SizedBox.shrink(),
+          ),
+        ],
       ),
     );
   }
@@ -1249,22 +1755,23 @@ class _EventList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (events.isEmpty) {
-      return Card(
+      return _DetailPanel(
         child: Center(
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(12),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
+                const Icon(
                   Icons.stadium,
                   size: 48,
-                  color: Theme.of(context).colorScheme.primary,
+                  color: MatchCenterColors.lime,
                 ),
                 const SizedBox(height: 12),
-                const Text(
+                Text(
                   'No events yet. Use the referee controls to kick things off.',
                   textAlign: TextAlign.center,
+                  style: MatchCenterTypography.body(fontSize: 14),
                 ),
               ],
             ),
@@ -1276,19 +1783,36 @@ class _EventList extends StatelessWidget {
     return Column(
       children: [
         for (final event in events)
-          Card(
+          Container(
             margin: const EdgeInsets.symmetric(vertical: 6),
+            decoration: BoxDecoration(
+              color: MatchCenterColors.panel,
+              border: Border.all(color: MatchCenterColors.borderBright),
+              borderRadius: BorderRadius.circular(18),
+            ),
             child: ListTile(
               leading: CircleAvatar(
-                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                foregroundColor: Theme.of(context)
-                    .colorScheme
-                    .onPrimaryContainer,
+                backgroundColor: _eventColor(event.type)
+                    .withValues(alpha: 0.18),
+                foregroundColor: _eventColor(event.type),
                 child: Icon(_iconFor(event.type)),
               ),
-              title: Text('${event.label} — ${event.subjectLabel}'),
-              subtitle: Text(_subtitleFor(event)),
-              trailing: const Icon(Icons.chevron_right),
+              title: Text(
+                '${event.label} — ${event.subjectLabel}',
+                style: MatchCenterTypography.body(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: MatchCenterColors.offWhite,
+                ),
+              ),
+              subtitle: Text(
+                _subtitleFor(event),
+                style: MatchCenterTypography.body(fontSize: 12),
+              ),
+              trailing: const Icon(
+                Icons.chevron_right,
+                color: MatchCenterColors.textSoft,
+              ),
             ),
           ),
       ],
@@ -1337,6 +1861,20 @@ extension on MatchEventType {
       MatchEventType.note => 'Note',
     };
   }
+}
+
+Color _eventColor(MatchEventType type) {
+  return switch (type) {
+    MatchEventType.goal => MatchCenterColors.lime,
+    MatchEventType.yellowCard => MatchCenterColors.caution,
+    MatchEventType.redCard => MatchCenterColors.danger,
+    MatchEventType.offside => MatchCenterColors.grass,
+    MatchEventType.substitution => MatchCenterColors.grass,
+    MatchEventType.halfStarted => MatchCenterColors.lime,
+    MatchEventType.halfEnded => MatchCenterColors.textSoft,
+    MatchEventType.foul => MatchCenterColors.caution,
+    MatchEventType.note => MatchCenterColors.textSoft,
+  };
 }
 
 class _ErrorText extends StatelessWidget {

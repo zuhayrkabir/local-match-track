@@ -1,14 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/material.dart';
 
 import '../ditto/ditto_manager.dart';
 import '../domain/app_role.dart';
 import '../domain/match_control.dart';
 import '../domain/match_event.dart';
+import '../domain/match_review_proposal.dart';
 import '../repositories/ditto/ditto_match_event_repository.dart';
 import '../repositories/match_event_repository.dart';
-
-final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
 
 final selectedRoleProvider = StateProvider<AppRole?>((ref) => null);
 
@@ -49,6 +47,17 @@ final matchEventsProvider = StreamProvider<List<MatchEvent>>((ref) async* {
 final allMatchEventsProvider = StreamProvider<List<MatchEvent>>((ref) async* {
   final repository = await ref.watch(matchEventRepositoryProvider.future);
   yield* repository.watchAllEvents();
+});
+
+final pendingReviewProposalsProvider =
+    StreamProvider<List<MatchReviewProposal>>((ref) async* {
+      final repository = await ref.watch(matchEventRepositoryProvider.future);
+      yield* repository.watchPendingReviewProposals();
+    });
+
+final refereeOnlineProvider = StreamProvider<bool>((ref) async* {
+  final repository = await ref.watch(matchEventRepositoryProvider.future);
+  yield* repository.watchRefereeOnline();
 });
 
 final matchControlProvider = StreamProvider<MatchControlState>((ref) async* {

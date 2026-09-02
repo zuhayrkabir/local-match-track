@@ -324,7 +324,11 @@ class BroadcastDashboardLayout extends StatelessWidget {
                   const SizedBox(width: 16),
                   SizedBox(
                     width: 330,
-                    child: BroadcastRightRail(events: events, matches: matches),
+                    child: BroadcastRightRail(
+                      events: events,
+                      matches: matches,
+                      featuredMatch: featured.match,
+                    ),
                   ),
                 ],
               );
@@ -344,7 +348,11 @@ class BroadcastDashboardLayout extends StatelessWidget {
                   onMatchSelected: onMatchSelected,
                 ),
                 const SizedBox(height: 16),
-                BroadcastRightRail(events: events, matches: matches),
+                BroadcastRightRail(
+                  events: events,
+                  matches: matches,
+                  featuredMatch: featured.match,
+                ),
               ],
             );
           },
@@ -595,7 +603,7 @@ class MatchCubeGrid extends StatelessWidget {
   }
 }
 
-class MatchCubeCard extends StatelessWidget {
+class MatchCubeCard extends StatefulWidget {
   const MatchCubeCard({
     super.key,
     required this.summary,
@@ -608,111 +616,167 @@ class MatchCubeCard extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
-    final statusColor = broadcastStatusColor(summary.match.status);
+  State<MatchCubeCard> createState() => _MatchCubeCardState();
+}
 
-    return BroadcastInteractiveSurface(
-      selected: selected,
-      onTap: onTap,
-      borderRadius: 24,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: selected
-                ? const [MatchCenterColors.featuredTop, MatchCenterColors.panel]
-                : const [
-                    MatchCenterColors.panelRaised,
-                    MatchCenterColors.pitchBlack,
+class _MatchCubeCardState extends State<MatchCubeCard> {
+  bool _hovered = false;
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = broadcastStatusColor(widget.summary.match.status);
+    final showPromotion = _hovered || _focused;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Focus(
+        onFocusChange: (focused) => setState(() => _focused = focused),
+        child: BroadcastInteractiveSurface(
+          selected: widget.selected || showPromotion,
+          onTap: widget.onTap,
+          borderRadius: 24,
+          child: Stack(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: widget.selected || showPromotion
+                        ? const [
+                            MatchCenterColors.featuredTop,
+                            MatchCenterColors.panel,
+                          ]
+                        : const [
+                            MatchCenterColors.panelRaised,
+                            MatchCenterColors.pitchBlack,
+                          ],
+                  ),
+                  border: Border.all(
+                    color: widget.selected || showPromotion
+                        ? MatchCenterColors.lime
+                        : MatchCenterColors.border,
+                    width: widget.selected ? 2 : 1,
+                  ),
+                ),
+                padding: const EdgeInsets.all(15),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'PITCH ${pitchNumberFor(widget.summary.match.id)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: MatchCenterTypography.label(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                              color: MatchCenterColors.muted,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                        ),
+                        BroadcastStatusPill(
+                          label: widget.summary.match.statusLabel,
+                          color: statusColor,
+                          isLive: widget.summary.match.isHalfRunning,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      widget.summary.match.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: MatchCenterTypography.display(
+                        fontSize: 21,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        height: 1.02,
+                      ),
+                    ),
+                    const Spacer(),
+                    Center(
+                      child: Text(
+                        widget.summary.scoreLabel,
+                        style: MatchCenterTypography.display(
+                          fontSize: 58,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: -3,
+                          height: 0.9,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: BroadcastMiniMetric(
+                            icon: widget.summary.match.isHalfRunning
+                                ? Icons.timer
+                                : Icons.timer_off,
+                            label: widget.summary.clockLabel,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: BroadcastMiniMetric(
+                            icon: Icons.hourglass_bottom,
+                            label: widget.summary.timeRemainingLabel
+                                .replaceFirst(' remaining', ''),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    BroadcastInfoPill(
+                      icon: Icons.update,
+                      label: widget.summary.latestEventLabel,
+                    ),
                   ],
-          ),
-          border: Border.all(
-            color: selected ? MatchCenterColors.lime : MatchCenterColors.border,
-            width: selected ? 2 : 1,
-          ),
-        ),
-        padding: const EdgeInsets.all(15),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'PITCH ${pitchNumberFor(summary.match.id)}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: MatchCenterTypography.label(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                      color: MatchCenterColors.muted,
-                      letterSpacing: 1.5,
+                ),
+              ),
+              Positioned(
+                left: 12,
+                right: 12,
+                bottom: 12,
+                child: IgnorePointer(
+                  ignoring: !showPromotion,
+                  child: AnimatedOpacity(
+                    opacity: showPromotion ? 1 : 0,
+                    duration: const Duration(milliseconds: 140),
+                    child: FilledButton.icon(
+                      onPressed: widget.onTap,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: MatchCenterColors.lime,
+                        foregroundColor: MatchCenterColors.pitchBlack,
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                      icon: const Icon(Icons.vertical_align_top, size: 16),
+                      label: Text(
+                        'Feature match',
+                        style: MatchCenterTypography.label(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          color: MatchCenterColors.pitchBlack,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-                BroadcastStatusPill(
-                  label: summary.match.statusLabel,
-                  color: statusColor,
-                  isLive: summary.match.isHalfRunning,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              summary.match.name,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: MatchCenterTypography.display(
-                fontSize: 21,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-                height: 1.02,
               ),
-            ),
-            const Spacer(),
-            Center(
-              child: Text(
-                summary.scoreLabel,
-                style: MatchCenterTypography.display(
-                  fontSize: 58,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                  letterSpacing: -3,
-                  height: 0.9,
-                ),
-              ),
-            ),
-            const Spacer(),
-            Row(
-              children: [
-                Expanded(
-                  child: BroadcastMiniMetric(
-                    icon: summary.match.isHalfRunning
-                        ? Icons.timer
-                        : Icons.timer_off,
-                    label: summary.clockLabel,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: BroadcastMiniMetric(
-                    icon: Icons.hourglass_bottom,
-                    label: summary.timeRemainingLabel.replaceFirst(
-                      ' remaining',
-                      '',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            BroadcastInfoPill(
-              icon: Icons.update,
-              label: summary.latestEventLabel,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -724,15 +788,18 @@ class BroadcastRightRail extends StatelessWidget {
     super.key,
     required this.events,
     required this.matches,
+    required this.featuredMatch,
   });
 
   final List<MatchEvent> events;
   final List<MatchControlState> matches;
+  final MatchControlState featuredMatch;
 
   @override
   Widget build(BuildContext context) {
-    final latestEvents = events.toList()
-      ..sort((a, b) => b.createdAtMillis.compareTo(a.createdAtMillis));
+    final latestEvents =
+        events.where((event) => event.matchId == featuredMatch.id).toList()
+          ..sort((a, b) => b.createdAtMillis.compareTo(a.createdAtMillis));
     final liveMatches = matches.where((match) => match.isHalfRunning).toList();
 
     return Column(
@@ -740,12 +807,11 @@ class BroadcastRightRail extends StatelessWidget {
         BroadcastRailPanel(
           title: 'Team timeline',
           icon: Icons.dynamic_feed,
-          child: latestEvents.isEmpty
-              ? Text(
-                  'No match events have been logged yet.',
-                  style: MatchCenterTypography.body(fontSize: 13),
-                )
-              : TeamSideTimeline(events: latestEvents.take(8).toList()),
+          child: TeamSideTimeline(
+            events: latestEvents.take(10).toList(),
+            homeTeamName: teamNameForSide(TeamSide.home),
+            awayTeamName: teamNameForSide(TeamSide.away),
+          ),
         ),
         const SizedBox(height: 14),
         BroadcastRailPanel(
@@ -848,14 +914,88 @@ class BroadcastRailPanel extends StatelessWidget {
 }
 
 class TeamSideTimeline extends StatelessWidget {
-  const TeamSideTimeline({super.key, required this.events});
+  const TeamSideTimeline({
+    super.key,
+    required this.events,
+    required this.homeTeamName,
+    required this.awayTeamName,
+  });
 
   final List<MatchEvent> events;
+  final String homeTeamName;
+  final String awayTeamName;
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      children: [for (final event in events) TeamSideTimelineRow(event: event)],
+      children: [
+        TeamTimelineHeader(
+          homeTeamName: homeTeamName,
+          awayTeamName: awayTeamName,
+        ),
+        const SizedBox(height: 10),
+        if (events.isEmpty)
+          Text(
+            'No match events have been logged yet.',
+            style: MatchCenterTypography.body(fontSize: 13),
+          )
+        else
+          for (final event in events) TeamSideTimelineRow(event: event),
+      ],
+    );
+  }
+}
+
+class TeamTimelineHeader extends StatelessWidget {
+  const TeamTimelineHeader({
+    super.key,
+    required this.homeTeamName,
+    required this.awayTeamName,
+  });
+
+  final String homeTeamName;
+  final String awayTeamName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            homeTeamName.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.right,
+            style: MatchCenterTypography.label(
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              color: MatchCenterColors.lime,
+              letterSpacing: 1.1,
+            ),
+          ),
+        ),
+        const SizedBox(
+          width: 46,
+          child: Icon(
+            Icons.sports_soccer,
+            color: MatchCenterColors.muted,
+            size: 15,
+          ),
+        ),
+        Expanded(
+          child: Text(
+            awayTeamName.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: MatchCenterTypography.label(
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              color: MatchCenterColors.offWhite,
+              letterSpacing: 1.1,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -898,20 +1038,32 @@ class TeamSideTimelineRow extends StatelessWidget {
               children: [
                 Container(
                   width: 1,
-                  height: 14,
+                  height: 18,
                   color: MatchCenterColors.border,
                 ),
-                Text(
-                  '${event.minute}’',
-                  style: MatchCenterTypography.label(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: MatchCenterColors.offWhite,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: MatchCenterColors.pitchBlack,
+                    border: Border.all(color: accent.withValues(alpha: 0.5)),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '${event.minute}’',
+                    style: MatchCenterTypography.label(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      color: MatchCenterColors.offWhite,
+                      letterSpacing: 0,
+                    ),
                   ),
                 ),
                 Container(
                   width: 1,
-                  height: 14,
+                  height: 18,
                   color: MatchCenterColors.border,
                 ),
               ],
@@ -943,24 +1095,39 @@ class TimelineEventBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 132),
+      constraints: const BoxConstraints(maxWidth: 138),
       child: Container(
         decoration: BoxDecoration(
-          color: accent.withValues(alpha: 0.13),
-          border: Border.all(color: accent.withValues(alpha: 0.30)),
+          color: event.type == MatchEventType.goal
+              ? MatchCenterColors.lime.withValues(alpha: 0.16)
+              : accent.withValues(alpha: 0.12),
+          border: Border.all(color: accent.withValues(alpha: 0.34)),
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(14),
-            topRight: const Radius.circular(14),
-            bottomLeft: Radius.circular(alignRight ? 14 : 4),
-            bottomRight: Radius.circular(alignRight ? 4 : 14),
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(alignRight ? 16 : 5),
+            bottomRight: Radius.circular(alignRight ? 5 : 16),
           ),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         child: Column(
           crossAxisAlignment: alignRight
               ? CrossAxisAlignment.end
               : CrossAxisAlignment.start,
           children: [
+            Text(
+              event.teamName.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: alignRight ? TextAlign.right : TextAlign.left,
+              style: MatchCenterTypography.label(
+                fontSize: 9,
+                fontWeight: FontWeight.w900,
+                color: accent,
+                letterSpacing: 1,
+              ),
+            ),
+            const SizedBox(height: 5),
             Row(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: alignRight
@@ -971,11 +1138,11 @@ class TimelineEventBubble extends StatelessWidget {
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(
-                    event.label,
+                    _eventHeadline(event),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: MatchCenterTypography.body(
-                      fontSize: 12,
+                      fontSize: 12.5,
                       fontWeight: FontWeight.w900,
                       color: MatchCenterColors.offWhite,
                     ),
@@ -985,7 +1152,7 @@ class TimelineEventBubble extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              event.subjectLabel,
+              _eventDetail(event),
               maxLines: 2,
               textAlign: alignRight ? TextAlign.right : TextAlign.left,
               overflow: TextOverflow.ellipsis,
@@ -1008,6 +1175,37 @@ class TimelineEventBubble extends StatelessWidget {
       MatchEventType.foul => Icons.sports,
       MatchEventType.note => Icons.notes,
     };
+  }
+
+  String _eventHeadline(MatchEvent event) {
+    return switch (event.type) {
+      MatchEventType.goal => 'Goal',
+      MatchEventType.yellowCard => 'Yellow card',
+      MatchEventType.redCard => 'Red card',
+      MatchEventType.offside => 'Offside',
+      MatchEventType.substitution => 'Substitution',
+      MatchEventType.halfStarted => 'Half started',
+      MatchEventType.halfEnded => 'Half ended',
+      MatchEventType.foul => 'Foul',
+      MatchEventType.note => 'Note',
+    };
+  }
+
+  String _eventDetail(MatchEvent event) {
+    if (event.type == MatchEventType.substitution &&
+        event.playerName != null &&
+        event.playerNumber != null &&
+        event.substitutePlayerName != null &&
+        event.substitutePlayerNumber != null) {
+      return '⬆ #${event.substitutePlayerNumber} ${event.substitutePlayerName}\n'
+          '⬇ #${event.playerNumber} ${event.playerName}';
+    }
+
+    if (event.playerName != null && event.playerNumber != null) {
+      return '#${event.playerNumber} ${event.playerName}';
+    }
+
+    return event.subjectLabel;
   }
 }
 
