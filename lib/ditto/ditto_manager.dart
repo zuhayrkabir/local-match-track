@@ -19,7 +19,10 @@ class DittoManager {
   );
 
   Ditto? _ditto;
+  SyncSubscription? _matchesSubscription;
   SyncSubscription? _matchEventsSubscription;
+  SyncSubscription? _matchReviewProposalsSubscription;
+  SyncSubscription? _matchParticipantsSubscription;
   PresenceObserver? _presenceObserver;
   bool _dataAccessReady = false;
 
@@ -43,7 +46,7 @@ class DittoManager {
 
   String get activationMessage {
     if (dataAccessReady) {
-      return 'Ditto is activated, subscribed to match_events, and syncing.';
+      return 'Ditto is activated, subscribed to matches, match_events, review proposals, and participants, and syncing.';
     }
     if (isServerMode && playgroundToken.isEmpty) {
       return 'DITTO_SERVER_URL was provided, but DITTO_PLAYGROUND_TOKEN is missing.';
@@ -89,8 +92,17 @@ class DittoManager {
 
     await openedDitto.store.execute('ALTER SYSTEM SET DQL_STRICT_MODE = false');
 
+    _matchesSubscription = openedDitto.sync.registerSubscription(
+      'SELECT * FROM matches',
+    );
     _matchEventsSubscription = openedDitto.sync.registerSubscription(
       'SELECT * FROM match_events',
+    );
+    _matchReviewProposalsSubscription = openedDitto.sync.registerSubscription(
+      'SELECT * FROM match_review_proposals',
+    );
+    _matchParticipantsSubscription = openedDitto.sync.registerSubscription(
+      'SELECT * FROM match_participants',
     );
 
     openedDitto.sync.start();
@@ -124,8 +136,14 @@ class DittoManager {
   Future<void> close() async {
     _presenceObserver?.stop();
     _presenceObserver = null;
+    _matchesSubscription?.cancel();
+    _matchesSubscription = null;
     _matchEventsSubscription?.cancel();
     _matchEventsSubscription = null;
+    _matchReviewProposalsSubscription?.cancel();
+    _matchReviewProposalsSubscription = null;
+    _matchParticipantsSubscription?.cancel();
+    _matchParticipantsSubscription = null;
 
     final value = _ditto;
     _ditto = null;
