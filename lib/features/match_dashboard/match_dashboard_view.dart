@@ -816,8 +816,8 @@ class BroadcastRightRail extends StatelessWidget {
         BroadcastRailPanel(
           title: 'Team timeline',
           icon: Icons.dynamic_feed,
-          child: TeamSideTimeline(
-            events: latestEvents.take(10).toList(),
+          child: ScrollableTeamTimeline(
+            events: latestEvents,
             homeTeamName: teamNameForSide(TeamSide.home),
             awayTeamName: teamNameForSide(TeamSide.away),
           ),
@@ -917,6 +917,58 @@ class BroadcastRailPanel extends StatelessWidget {
           const SizedBox(height: 14),
           child,
         ],
+      ),
+    );
+  }
+}
+
+class ScrollableTeamTimeline extends StatefulWidget {
+  const ScrollableTeamTimeline({
+    super.key,
+    required this.events,
+    required this.homeTeamName,
+    required this.awayTeamName,
+  });
+
+  final List<MatchEvent> events;
+  final String homeTeamName;
+  final String awayTeamName;
+
+  @override
+  State<ScrollableTeamTimeline> createState() => _ScrollableTeamTimelineState();
+}
+
+class _ScrollableTeamTimelineState extends State<ScrollableTeamTimeline> {
+  final ScrollController _controller = ScrollController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final timeline = TeamSideTimeline(
+      events: widget.events,
+      homeTeamName: widget.homeTeamName,
+      awayTeamName: widget.awayTeamName,
+    );
+
+    if (widget.events.length <= 6) {
+      return timeline;
+    }
+
+    return SizedBox(
+      height: 420,
+      child: Scrollbar(
+        controller: _controller,
+        thumbVisibility: true,
+        child: SingleChildScrollView(
+          controller: _controller,
+          padding: const EdgeInsets.only(right: 12),
+          child: timeline,
+        ),
       ),
     );
   }
