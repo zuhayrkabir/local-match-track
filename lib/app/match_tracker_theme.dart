@@ -29,6 +29,7 @@ class MatchTrackerTheme {
       colorScheme: scheme,
       brightness: Brightness.dark,
       useMaterial3: true,
+      visualDensity: VisualDensity.standard,
       textTheme: GoogleFonts.chivoTextTheme().copyWith(
         displayLarge: GoogleFonts.oswald(fontWeight: FontWeight.w800),
         displayMedium: GoogleFonts.oswald(fontWeight: FontWeight.w800),
@@ -83,6 +84,28 @@ class MatchTrackerTheme {
           height: 1.45,
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: MatchCenterColors.panelRaised,
+        contentTextStyle: MatchCenterTypography.body(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: MatchCenterColors.offWhite,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      ),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: MatchCenterColors.panelRaised,
+          border: Border.all(color: MatchCenterColors.borderBright),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        textStyle: MatchCenterTypography.body(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: MatchCenterColors.offWhite,
+        ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -140,18 +163,128 @@ class MatchTrackerTheme {
           padding: WidgetStateProperty.all(
             const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           ),
+          minimumSize: WidgetStateProperty.all(const Size(64, 48)),
+          tapTargetSize: MaterialTapTargetSize.padded,
+          overlayColor: WidgetStateProperty.all(
+            Colors.white.withValues(alpha: 0.16),
+          ),
           shape: WidgetStateProperty.all(
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          ),
+          textStyle: WidgetStateProperty.all(
+            MatchCenterTypography.label(
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              color: MatchCenterColors.pitchBlack,
+              letterSpacing: 0.2,
+            ),
           ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: MatchCenterColors.offWhite,
-          side: const BorderSide(color: MatchCenterColors.borderBright),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+        style: ButtonStyle(
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.disabled)) {
+              return MatchCenterColors.textMuted;
+            }
+            if (states.contains(WidgetState.pressed)) {
+              return MatchCenterColors.lime;
+            }
+            return MatchCenterColors.offWhite;
+          }),
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.hovered) ||
+                states.contains(WidgetState.focused)) {
+              return MatchCenterColors.lime.withValues(alpha: 0.08);
+            }
+            return Colors.transparent;
+          }),
+          side: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.disabled)) {
+              return BorderSide(
+                color: MatchCenterColors.border.withValues(alpha: 0.65),
+              );
+            }
+            if (states.contains(WidgetState.focused) ||
+                states.contains(WidgetState.hovered)) {
+              return const BorderSide(
+                color: MatchCenterColors.lime,
+                width: 1.4,
+              );
+            }
+            return const BorderSide(color: MatchCenterColors.borderBright);
+          }),
+          padding: WidgetStateProperty.all(
+            const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+          ),
+          minimumSize: WidgetStateProperty.all(const Size(64, 48)),
+          tapTargetSize: MaterialTapTargetSize.padded,
+          overlayColor: WidgetStateProperty.all(
+            MatchCenterColors.lime.withValues(alpha: 0.12),
+          ),
+          shape: WidgetStateProperty.all(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          ),
+          textStyle: WidgetStateProperty.all(
+            MatchCenterTypography.label(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: MatchCenterColors.offWhite,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.disabled)) {
+              return MatchCenterColors.textMuted;
+            }
+            return MatchCenterColors.lime;
+          }),
+          minimumSize: WidgetStateProperty.all(const Size(64, 48)),
+          tapTargetSize: MaterialTapTargetSize.padded,
+          overlayColor: WidgetStateProperty.all(
+            MatchCenterColors.lime.withValues(alpha: 0.12),
+          ),
+          shape: WidgetStateProperty.all(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          textStyle: WidgetStateProperty.all(
+            MatchCenterTypography.label(
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              color: MatchCenterColors.lime,
+            ),
+          ),
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.disabled)) {
+              return MatchCenterColors.textMuted;
+            }
+            if (states.contains(WidgetState.pressed)) {
+              return MatchCenterColors.pitchBlack;
+            }
+            return MatchCenterColors.offWhite;
+          }),
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.pressed)) {
+              return MatchCenterColors.lime;
+            }
+            if (states.contains(WidgetState.hovered) ||
+                states.contains(WidgetState.focused)) {
+              return MatchCenterColors.lime.withValues(alpha: 0.12);
+            }
+            return Colors.transparent;
+          }),
+          minimumSize: WidgetStateProperty.all(const Size.square(48)),
+          tapTargetSize: MaterialTapTargetSize.padded,
+          shape: WidgetStateProperty.all(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           ),
         ),
       ),
@@ -175,9 +308,22 @@ class MatchTrackerTheme {
           side: WidgetStateProperty.all(
             const BorderSide(color: MatchCenterColors.borderBright),
           ),
+          minimumSize: WidgetStateProperty.all(const Size(64, 48)),
+          tapTargetSize: MaterialTapTargetSize.padded,
           shape: WidgetStateProperty.all(
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           ),
+        ),
+      ),
+      tabBarTheme: TabBarThemeData(
+        labelColor: MatchCenterColors.lime,
+        unselectedLabelColor: MatchCenterColors.textSoft,
+        indicatorColor: MatchCenterColors.lime,
+        dividerColor: MatchCenterColors.border,
+        labelStyle: MatchCenterTypography.label(
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+          color: MatchCenterColors.lime,
         ),
       ),
       listTileTheme: ListTileThemeData(

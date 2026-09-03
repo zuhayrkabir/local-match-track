@@ -613,59 +613,68 @@ class _RoleOptionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
-        hoverColor: MatchCenterColors.lime.withValues(alpha: 0.06),
-        focusColor: MatchCenterColors.lime.withValues(alpha: 0.10),
-        splashColor: MatchCenterColors.lime.withValues(alpha: 0.16),
-        child: Container(
-          decoration: BoxDecoration(
-            color: MatchCenterColors.panel,
-            border: Border.all(color: MatchCenterColors.border),
-            borderRadius: BorderRadius.circular(24),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: MatchCenterColors.lime.withValues(alpha: 0.16),
-                  shape: BoxShape.circle,
+    return Semantics(
+      button: true,
+      label: '${role.label} mode',
+      hint: role.description,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(24),
+          hoverColor: MatchCenterColors.lime.withValues(alpha: 0.06),
+          focusColor: MatchCenterColors.lime.withValues(alpha: 0.10),
+          splashColor: MatchCenterColors.lime.withValues(alpha: 0.16),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 72),
+            decoration: BoxDecoration(
+              color: MatchCenterColors.panel,
+              border: Border.all(color: MatchCenterColors.border),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: MatchCenterColors.lime.withValues(alpha: 0.16),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _iconForRole(role),
+                    color: MatchCenterColors.lime,
+                  ),
                 ),
-                child: Icon(_iconForRole(role), color: MatchCenterColors.lime),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      role.label,
-                      style: MatchCenterTypography.body(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        role.label,
+                        style: MatchCenterTypography.body(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      role.description,
-                      style: MatchCenterTypography.body(fontSize: 13),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        role.description,
+                        style: MatchCenterTypography.body(fontSize: 13),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              const Icon(
-                Icons.chevron_right,
-                color: MatchCenterColors.offWhite,
-              ),
-            ],
+                const SizedBox(width: 10),
+                const Icon(
+                  Icons.chevron_right,
+                  color: MatchCenterColors.offWhite,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1551,96 +1560,82 @@ class _SubstitutionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.swap_horiz,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Log substitution',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            SegmentedButton<TeamSide>(
-              segments: [
-                for (final teamSide in TeamSide.values)
-                  ButtonSegment(
-                    value: teamSide,
-                    label: Text(teamNameForSide(teamSide)),
-                    icon: Icon(
-                      teamSide == TeamSide.home ? Icons.shield : Icons.flag,
-                    ),
-                  ),
-              ],
-              selected: {selectedTeamSide},
-              onSelectionChanged: canWrite
-                  ? (selection) => onTeamChanged(selection.first)
-                  : null,
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Icon(Icons.arrow_downward, color: Colors.red),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: DropdownButtonFormField<DemoPlayer>(
-                    initialValue: selectedPlayerOut,
-                    decoration: const InputDecoration(labelText: 'Player off'),
-                    items: [
-                      for (final player in demoStartersForSide(
-                        selectedTeamSide,
-                      ))
-                        DropdownMenuItem(
-                          value: player,
-                          child: Text(player.rosterLabel),
-                        ),
-                    ],
-                    onChanged: canWrite ? onPlayerOutChanged : null,
+    return _DetailPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _DetailHeader(
+            icon: Icons.swap_horiz,
+            title: 'Log substitution',
+          ),
+          const SizedBox(height: 12),
+          SegmentedButton<TeamSide>(
+            segments: [
+              for (final teamSide in TeamSide.values)
+                ButtonSegment(
+                  value: teamSide,
+                  label: Text(teamNameForSide(teamSide)),
+                  icon: Icon(
+                    teamSide == TeamSide.home ? Icons.shield : Icons.flag,
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Icon(Icons.arrow_upward, color: Colors.green),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: DropdownButtonFormField<DemoPlayer>(
-                    initialValue: selectedPlayerIn,
-                    decoration: const InputDecoration(labelText: 'Player on'),
-                    items: [
-                      for (final player in demoBenchPlayersForSide(
-                        selectedTeamSide,
-                      ))
-                        DropdownMenuItem(
-                          value: player,
-                          child: Text(player.rosterLabel),
-                        ),
-                    ],
-                    onChanged: canWrite ? onPlayerInChanged : null,
-                  ),
+            ],
+            selected: {selectedTeamSide},
+            onSelectionChanged: canWrite
+                ? (selection) => onTeamChanged(selection.first)
+                : null,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(Icons.arrow_downward, color: MatchCenterColors.danger),
+              const SizedBox(width: 8),
+              Expanded(
+                child: DropdownButtonFormField<DemoPlayer>(
+                  initialValue: selectedPlayerOut,
+                  decoration: const InputDecoration(labelText: 'Player off'),
+                  items: [
+                    for (final player in demoStartersForSide(selectedTeamSide))
+                      DropdownMenuItem(
+                        value: player,
+                        child: Text(player.rosterLabel),
+                      ),
+                  ],
+                  onChanged: canWrite ? onPlayerOutChanged : null,
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: canWrite ? onLogSubstitution : null,
-              icon: const Icon(Icons.swap_vert),
-              label: const Text('Log substitution'),
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(Icons.arrow_upward, color: MatchCenterColors.grass),
+              const SizedBox(width: 8),
+              Expanded(
+                child: DropdownButtonFormField<DemoPlayer>(
+                  initialValue: selectedPlayerIn,
+                  decoration: const InputDecoration(labelText: 'Player on'),
+                  items: [
+                    for (final player in demoBenchPlayersForSide(
+                      selectedTeamSide,
+                    ))
+                      DropdownMenuItem(
+                        value: player,
+                        child: Text(player.rosterLabel),
+                      ),
+                  ],
+                  onChanged: canWrite ? onPlayerInChanged : null,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: canWrite ? onLogSubstitution : null,
+            icon: const Icon(Icons.swap_vert),
+            label: const Text('Log substitution'),
+          ),
+        ],
       ),
     );
   }

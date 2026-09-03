@@ -628,154 +628,163 @@ class _MatchCubeCardState extends State<MatchCubeCard> {
     final statusColor = broadcastStatusColor(widget.summary.match.status);
     final showPromotion = _hovered || _focused;
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: Focus(
-        onFocusChange: (focused) => setState(() => _focused = focused),
-        child: BroadcastInteractiveSurface(
-          selected: widget.selected || showPromotion,
-          onTap: widget.onTap,
-          borderRadius: 24,
-          child: Stack(
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: widget.selected || showPromotion
-                        ? const [
-                            MatchCenterColors.featuredTop,
-                            MatchCenterColors.panel,
-                          ]
-                        : const [
-                            MatchCenterColors.panelRaised,
-                            MatchCenterColors.pitchBlack,
-                          ],
+    return Semantics(
+      button: true,
+      selected: widget.selected,
+      label: 'Feature ${widget.summary.match.name}',
+      hint:
+          'Shows ${widget.summary.scoreLabel} and makes this the main dashboard match.',
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: Focus(
+          onFocusChange: (focused) => setState(() => _focused = focused),
+          child: BroadcastInteractiveSurface(
+            selected: widget.selected || showPromotion,
+            onTap: widget.onTap,
+            borderRadius: 24,
+            child: Stack(
+              children: [
+                Container(
+                  constraints: const BoxConstraints(minHeight: 220),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: widget.selected || showPromotion
+                          ? const [
+                              MatchCenterColors.featuredTop,
+                              MatchCenterColors.panel,
+                            ]
+                          : const [
+                              MatchCenterColors.panelRaised,
+                              MatchCenterColors.pitchBlack,
+                            ],
+                    ),
+                    border: Border.all(
+                      color: widget.selected || showPromotion
+                          ? MatchCenterColors.lime
+                          : MatchCenterColors.border,
+                      width: widget.selected ? 2 : 1,
+                    ),
                   ),
-                  border: Border.all(
-                    color: widget.selected || showPromotion
-                        ? MatchCenterColors.lime
-                        : MatchCenterColors.border,
-                    width: widget.selected ? 2 : 1,
-                  ),
-                ),
-                padding: const EdgeInsets.all(15),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'PITCH ${pitchNumberFor(widget.summary.match.id)}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: MatchCenterTypography.label(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w900,
-                              color: MatchCenterColors.muted,
-                              letterSpacing: 1.5,
+                  padding: const EdgeInsets.all(15),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'PITCH ${pitchNumberFor(widget.summary.match.id)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: MatchCenterTypography.label(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                                color: MatchCenterColors.muted,
+                                letterSpacing: 1.5,
+                              ),
                             ),
                           ),
-                        ),
-                        BroadcastStatusPill(
-                          label: widget.summary.match.statusLabel,
-                          color: statusColor,
-                          isLive: widget.summary.match.isHalfRunning,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      widget.summary.match.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: MatchCenterTypography.display(
-                        fontSize: 21,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        height: 1.02,
+                          BroadcastStatusPill(
+                            label: widget.summary.match.statusLabel,
+                            color: statusColor,
+                            isLive: widget.summary.match.isHalfRunning,
+                          ),
+                        ],
                       ),
-                    ),
-                    const Spacer(),
-                    Center(
-                      child: Text(
-                        widget.summary.scoreLabel,
+                      const SizedBox(height: 12),
+                      Text(
+                        widget.summary.match.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: MatchCenterTypography.display(
-                          fontSize: 58,
-                          fontWeight: FontWeight.w800,
+                          fontSize: 21,
+                          fontWeight: FontWeight.w700,
                           color: Colors.white,
-                          letterSpacing: -3,
-                          height: 0.9,
+                          height: 1.02,
                         ),
                       ),
-                    ),
-                    const Spacer(),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: BroadcastMiniMetric(
-                            icon: widget.summary.match.isHalfRunning
-                                ? Icons.timer
-                                : Icons.timer_off,
-                            label: widget.summary.clockLabel,
+                      const Spacer(),
+                      Center(
+                        child: Text(
+                          widget.summary.scoreLabel,
+                          style: MatchCenterTypography.display(
+                            fontSize: 58,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: -3,
+                            height: 0.9,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: BroadcastMiniMetric(
-                            icon: Icons.hourglass_bottom,
-                            label: widget.summary.timeRemainingLabel
-                                .replaceFirst(' remaining', ''),
+                      ),
+                      const Spacer(),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: BroadcastMiniMetric(
+                              icon: widget.summary.match.isHalfRunning
+                                  ? Icons.timer
+                                  : Icons.timer_off,
+                              label: widget.summary.clockLabel,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    BroadcastInfoPill(
-                      icon: Icons.update,
-                      label: widget.summary.latestEventLabel,
-                    ),
-                  ],
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: BroadcastMiniMetric(
+                              icon: Icons.hourglass_bottom,
+                              label: widget.summary.timeRemainingLabel
+                                  .replaceFirst(' remaining', ''),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      BroadcastInfoPill(
+                        icon: Icons.update,
+                        label: widget.summary.latestEventLabel,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Positioned(
-                left: 12,
-                right: 12,
-                bottom: 12,
-                child: IgnorePointer(
-                  ignoring: !showPromotion,
-                  child: AnimatedOpacity(
-                    opacity: showPromotion ? 1 : 0,
-                    duration: const Duration(milliseconds: 140),
-                    child: FilledButton.icon(
-                      onPressed: widget.onTap,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: MatchCenterColors.lime,
-                        foregroundColor: MatchCenterColors.pitchBlack,
-                        padding: const EdgeInsets.symmetric(vertical: 11),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(999),
+                Positioned(
+                  left: 12,
+                  right: 12,
+                  bottom: 12,
+                  child: IgnorePointer(
+                    ignoring: !showPromotion,
+                    child: AnimatedOpacity(
+                      opacity: showPromotion ? 1 : 0,
+                      duration: const Duration(milliseconds: 140),
+                      child: FilledButton.icon(
+                        onPressed: widget.onTap,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: MatchCenterColors.lime,
+                          foregroundColor: MatchCenterColors.pitchBlack,
+                          minimumSize: const Size(64, 48),
+                          padding: const EdgeInsets.symmetric(vertical: 11),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
                         ),
-                      ),
-                      icon: const Icon(Icons.vertical_align_top, size: 16),
-                      label: Text(
-                        'Feature match',
-                        style: MatchCenterTypography.label(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w900,
-                          color: MatchCenterColors.pitchBlack,
-                          letterSpacing: 0.3,
+                        icon: const Icon(Icons.vertical_align_top, size: 16),
+                        label: Text(
+                          'Feature match',
+                          style: MatchCenterTypography.label(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                            color: MatchCenterColors.pitchBlack,
+                            letterSpacing: 0.3,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1404,6 +1413,7 @@ class BroadcastInteractiveSurface extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(borderRadius),
+          mouseCursor: SystemMouseCursors.click,
           hoverColor: MatchCenterColors.lime.withValues(alpha: 0.06),
           focusColor: MatchCenterColors.lime.withValues(alpha: 0.10),
           splashColor: MatchCenterColors.lime.withValues(alpha: 0.16),
