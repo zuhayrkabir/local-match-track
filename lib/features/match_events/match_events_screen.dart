@@ -575,6 +575,12 @@ class _RenameMatchDialogState extends State<_RenameMatchDialog> {
       content: TextField(
         controller: _controller,
         autofocus: true,
+        cursorColor: MatchCenterColors.lime,
+        style: MatchCenterTypography.body(
+          fontSize: 16,
+          fontWeight: FontWeight.w800,
+          color: MatchCenterColors.offWhite,
+        ),
         textCapitalization: TextCapitalization.words,
         textInputAction: TextInputAction.done,
         decoration: const InputDecoration(
