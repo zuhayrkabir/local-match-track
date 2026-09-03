@@ -143,6 +143,68 @@ void main() {
     expect(find.text('Yellow card'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('uses a scrollable dashboard timeline for long event lists', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    const match = MatchControlState(
+      id: 'match-1',
+      name: 'Green FC vs White FC',
+      selectedHalf: MatchHalf.first,
+      status: MatchStatus.firstHalf,
+      createdAtMillis: 1000,
+      updatedAtMillis: 1000,
+      elapsedSeconds: 60,
+      clockStartedAtMillis: 1000,
+    );
+    final events = List.generate(
+      12,
+      (index) => MatchEvent(
+        id: 'event-$index',
+        matchId: 'match-1',
+        type: index.isEven ? MatchEventType.goal : MatchEventType.foul,
+        teamName: index.isEven ? 'Green FC' : 'White FC',
+        minute: index + 1,
+        createdAtMillis: 2000 + index,
+        teamSide: index.isEven ? TeamSide.home : TeamSide.away,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: MatchDashboardView(
+              canWrite: true,
+              matchesState: const AsyncData([match]),
+              allEventsState: AsyncData(events),
+              presenceState: const AsyncData(
+                DittoPresenceSummary(
+                  localPeerName: 'Test peer',
+                  remotePeerCount: 2,
+                  connectedToDittoServer: true,
+                ),
+              ),
+              selectedMatchId: 'match-1',
+              onMatchSelected: _noopString,
+              onCreateMatch: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.byType(ScrollableTeamTimeline), findsOneWidget);
+    expect(find.byType(Scrollbar), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 void _noop() {}

@@ -154,6 +154,7 @@ class _MatchEventsScreenState extends ConsumerState<MatchEventsScreen> {
                   ref.read(selectedMatchIdProvider.notifier).state = matchId;
                 },
                 onCreateMatch: _createMatch,
+                onRenameMatch: _renameSelectedMatch,
                 onDeleteMatch: _deleteSelectedMatch,
               ),
               const SizedBox(height: 16),
@@ -288,8 +289,32 @@ class _MatchEventsScreenState extends ConsumerState<MatchEventsScreen> {
     try {
       final match = await repository.createMatch();
       ref.read(selectedMatchIdProvider.notifier).state = match.id;
+      ref.read(showDashboardProvider.notifier).state = false;
     } catch (error) {
       _showSnackBar('Could not create match: $error');
+    }
+  }
+
+  Future<void> _renameSelectedMatch() async {
+    final selectedMatchId = ref.read(selectedMatchIdProvider);
+    final currentMatch = ref.read(matchControlProvider).valueOrNull;
+    final initialName = currentMatch?.id == selectedMatchId
+        ? currentMatch?.name
+        : null;
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (context) =>
+          _RenameMatchDialog(initialName: initialName ?? 'Untitled match'),
+    );
+
+    if (newName == null || newName.isEmpty || newName == initialName) return;
+
+    final repository = await ref.read(matchEventRepositoryProvider.future);
+    try {
+      await repository.renameMatch(matchId: selectedMatchId, name: newName);
+      _showSnackBar('Renamed match to $newName.');
+    } catch (error) {
+      _showSnackBar('Could not rename match: $error');
     }
   }
 
@@ -516,6 +541,61 @@ class _MatchEventsScreenState extends ConsumerState<MatchEventsScreen> {
     } else if (decision == false) {
       await _rejectReviewProposal(proposal);
     }
+  }
+}
+
+class _RenameMatchDialog extends StatefulWidget {
+  const _RenameMatchDialog({required this.initialName});
+
+  final String initialName;
+
+  @override
+  State<_RenameMatchDialog> createState() => _RenameMatchDialogState();
+}
+
+class _RenameMatchDialogState extends State<_RenameMatchDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialName);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Rename match'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        textCapitalization: TextCapitalization.words,
+        textInputAction: TextInputAction.done,
+        decoration: const InputDecoration(
+          labelText: 'Match name',
+          hintText: 'Example: U18 semifinal',
+        ),
+        onSubmitted: (_) {
+          Navigator.of(context).pop(_controller.text.trim());
+        },
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+          child: const Text('Save'),
+        ),
+      ],
+    );
   }
 }
 
@@ -802,6 +882,7 @@ class _MatchSessionCard extends StatelessWidget {
     required this.selectedMatchId,
     required this.onMatchSelected,
     required this.onCreateMatch,
+    required this.onRenameMatch,
     required this.onDeleteMatch,
   });
 
@@ -810,6 +891,7 @@ class _MatchSessionCard extends StatelessWidget {
   final String selectedMatchId;
   final ValueChanged<String?> onMatchSelected;
   final VoidCallback onCreateMatch;
+  final VoidCallback onRenameMatch;
   final VoidCallback onDeleteMatch;
 
   @override
@@ -859,6 +941,11 @@ class _MatchSessionCard extends StatelessWidget {
                 onPressed: canWrite ? onCreateMatch : null,
                 icon: const Icon(Icons.add),
                 label: const Text('Create new match'),
+              ),
+              OutlinedButton.icon(
+                onPressed: canWrite ? onRenameMatch : null,
+                icon: const Icon(Icons.drive_file_rename_outline),
+                label: const Text('Rename match'),
               ),
               OutlinedButton.icon(
                 onPressed: canWrite ? onDeleteMatch : null,
@@ -1216,13 +1303,18 @@ class _OfficialEventCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<DemoPlayer>(
+            isExpanded: true,
             initialValue: selectedPlayer,
             decoration: const InputDecoration(labelText: 'Player involved'),
             items: [
               for (final player in demoPlayersForSide(selectedTeamSide))
                 DropdownMenuItem(
                   value: player,
-                  child: Text(player.rosterLabel),
+                  child: Text(
+                    player.rosterLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
             ],
             onChanged: canWrite ? onPlayerChanged : null,
@@ -1347,13 +1439,18 @@ class _AssistantReviewProposalCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<DemoPlayer>(
+            isExpanded: true,
             initialValue: selectedPlayer,
             decoration: const InputDecoration(labelText: 'Player involved'),
             items: [
               for (final player in demoPlayersForSide(selectedTeamSide))
                 DropdownMenuItem(
                   value: player,
-                  child: Text(player.rosterLabel),
+                  child: Text(
+                    player.rosterLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
             ],
             onChanged: canPropose ? onPlayerChanged : null,
@@ -1592,13 +1689,18 @@ class _SubstitutionCard extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: DropdownButtonFormField<DemoPlayer>(
+                  isExpanded: true,
                   initialValue: selectedPlayerOut,
                   decoration: const InputDecoration(labelText: 'Player off'),
                   items: [
                     for (final player in demoStartersForSide(selectedTeamSide))
                       DropdownMenuItem(
                         value: player,
-                        child: Text(player.rosterLabel),
+                        child: Text(
+                          player.rosterLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                   ],
                   onChanged: canWrite ? onPlayerOutChanged : null,
@@ -1613,6 +1715,7 @@ class _SubstitutionCard extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: DropdownButtonFormField<DemoPlayer>(
+                  isExpanded: true,
                   initialValue: selectedPlayerIn,
                   decoration: const InputDecoration(labelText: 'Player on'),
                   items: [
@@ -1621,7 +1724,11 @@ class _SubstitutionCard extends StatelessWidget {
                     ))
                       DropdownMenuItem(
                         value: player,
-                        child: Text(player.rosterLabel),
+                        child: Text(
+                          player.rosterLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                   ],
                   onChanged: canWrite ? onPlayerInChanged : null,

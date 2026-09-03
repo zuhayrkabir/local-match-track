@@ -281,6 +281,25 @@ class DittoMatchEventRepository implements MatchEventRepository {
   }
 
   @override
+  Future<void> renameMatch({
+    required String matchId,
+    required String name,
+  }) async {
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      throw ArgumentError('Match name cannot be empty.');
+    }
+
+    final match = await _readMatchControlById(matchId);
+    await _saveMatchControl(
+      match.copyWith(
+        name: trimmedName,
+        updatedAtMillis: DateTime.now().millisecondsSinceEpoch,
+      ),
+    );
+  }
+
+  @override
   Future<void> selectHalf(MatchHalf half) async {
     final current = await _readMatchControl();
     await _saveMatchControl(
@@ -502,13 +521,17 @@ class DittoMatchEventRepository implements MatchEventRepository {
   }
 
   Future<MatchControlState> _readMatchControl() async {
+    return _readMatchControlById(_matchId);
+  }
+
+  Future<MatchControlState> _readMatchControlById(String matchId) async {
     final result = await _ditto.store.execute(
       'SELECT * FROM matches WHERE _id = :matchId',
-      arguments: {'matchId': _matchId},
+      arguments: {'matchId': matchId},
     );
 
     if (result.items.isEmpty) {
-      return MatchControlState.initial(id: _matchId);
+      return MatchControlState.initial(id: matchId);
     }
     return MatchControlState.fromJson(result.items.first.value);
   }

@@ -21,6 +21,8 @@ abstract interface class MatchEventRepository {
 
   Future<void> deleteMatch(String matchId);
 
+  Future<void> renameMatch({required String matchId, required String name});
+
   Future<void> selectHalf(MatchHalf half);
 
   Future<void> startSelectedHalf();
@@ -96,6 +98,11 @@ class DisabledMatchEventRepository implements MatchEventRepository {
 
   @override
   Future<void> deleteMatch(String matchId) {
+    throw StateError(reason);
+  }
+
+  @override
+  Future<void> renameMatch({required String matchId, required String name}) {
     throw StateError(reason);
   }
 
