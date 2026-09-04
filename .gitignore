@@ -45,5 +45,14 @@ app.*.map.json
 /android/app/release
 /android/build/
 
+# Local credentials / generated app config
+.env
+**/Env.swift
+
+# Xcode local state
+**/*.xcuserstate
+**/xcuserdata/
+DerivedData/
+
 # Widget Preview related
 .widget_preview/
