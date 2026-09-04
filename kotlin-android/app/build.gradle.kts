@@ -1,5 +1,6 @@
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 fun Project.stringProperty(name: String): String =
@@ -23,6 +24,7 @@ android {
 
     buildFeatures {
         buildConfig = true
+        compose = true
     }
 
     compileOptions {
@@ -34,5 +36,7 @@ android {
 
 dependencies {
     implementation("com.ditto:ditto-kotlin:5.1.0")
+    implementation("com.ditto:ditto-tools-android:6.0.0")
+    implementation("androidx.activity:activity-compose:1.10.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 }
