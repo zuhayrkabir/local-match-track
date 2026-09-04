@@ -25,6 +25,12 @@ struct ContentView: View {
     @State private var selectedSection = AppSection.dashboard
     @State private var selectedTeam = TeamSide.home
     @State private var selectedAction = MatchAction.goal
+    @State private var selectedReviewTeam = TeamSide.home
+    @State private var selectedReviewAction = ReviewAction.offside
+    @State private var selectedReviewPlayerId = SampleRoster.homeStarters.first?.id ?? ""
+    @State private var selectedSubTeam = TeamSide.home
+    @State private var selectedPlayerOutId = SampleRoster.homeStarters.first?.id ?? ""
+    @State private var selectedPlayerInId = SampleRoster.homeBench.first?.id ?? ""
     @State private var matchNameDraft = ""
     @State private var showDittoTools = false
 
@@ -68,6 +74,20 @@ struct ContentView: View {
         }
         .onChange(of: repository.selectedMatch?.id) { _ in
             matchNameDraft = repository.selectedMatch?.name ?? ""
+            repository.publishPresence(role: selectedRole)
+        }
+        .onChange(of: selectedRole) { role in
+            repository.publishPresence(role: role)
+        }
+        .onChange(of: selectedReviewTeam) { side in
+            selectedReviewPlayerId = SampleRoster.starters(for: side).first?.id ?? ""
+        }
+        .onChange(of: selectedSubTeam) { side in
+            selectedPlayerOutId = SampleRoster.starters(for: side).first?.id ?? ""
+            selectedPlayerInId = SampleRoster.bench(for: side).first?.id ?? ""
+        }
+        .onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect()) { _ in
+            repository.publishPresence(role: selectedRole)
         }
     }
 
@@ -132,6 +152,7 @@ struct ContentView: View {
                 )
                 sessionCard(match: match)
                 controlsSection
+                rostersSection
                 timelineSection
             } else {
                 EmptyStateText(
@@ -277,6 +298,14 @@ struct ContentView: View {
                 statPill(title: "Mode", value: selectedRole.label)
             }
 
+            HStack(spacing: 12) {
+                statPill(
+                    title: "Referee Online",
+                    value: repository.isRefereeOnlineForSelectedMatch ? "Yes" : "No"
+                )
+                statPill(title: "Pending Reviews", value: "\(repository.selectedPendingProposals.count)")
+            }
+
             if selectedRole.canWriteMatch {
                 VStack(alignment: .leading, spacing: 8) {
                     label("EDIT MATCH NAME", color: MatchTheme.textMuted)
@@ -345,6 +374,10 @@ struct ContentView: View {
                 }
                 .buttonStyle(PrimaryMatchButtonStyle())
 
+                substitutionControls
+
+                reviewQueue
+
                 Button("Delete Selected Match") {
                     repository.deleteSelectedMatch()
                     selectedSection = .dashboard
@@ -352,17 +385,132 @@ struct ContentView: View {
                 .buttonStyle(DangerMatchButtonStyle())
             }
             .matchCard()
+        } else if selectedRole.canProposeReviews {
+            VStack(alignment: .leading, spacing: 14) {
+                label("ASSISTANT REFEREE", color: MatchTheme.lime)
+
+                EmptyStateText(
+                    repository.isRefereeOnlineForSelectedMatch
+                    ? "A referee is online. You can propose a foul or offside review."
+                    : "You can view the match, but cannot send review proposals until a referee is online."
+                )
+
+                Picker("Review Team", selection: $selectedReviewTeam) {
+                    ForEach(TeamSide.allCases) { side in
+                        Text(side.teamName).tag(side)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Picker("Review Type", selection: $selectedReviewAction) {
+                    ForEach(ReviewAction.allCases) { action in
+                        Text(action.label).tag(action)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Picker("Player", selection: $selectedReviewPlayerId) {
+                    ForEach(SampleRoster.starters(for: selectedReviewTeam)) { player in
+                        Text(player.label).tag(player.id)
+                    }
+                }
+                .pickerStyle(.menu)
+                .tint(MatchTheme.lime)
+
+                Button("Propose \(selectedReviewAction.label)") {
+                    repository.proposeReview(
+                        selectedReviewAction,
+                        teamSide: selectedReviewTeam,
+                        playerId: selectedReviewPlayerId
+                    )
+                }
+                .buttonStyle(PrimaryMatchButtonStyle())
+                .disabled(!repository.isRefereeOnlineForSelectedMatch)
+            }
+            .matchCard()
         } else {
             VStack(alignment: .leading, spacing: 10) {
-                label(selectedRole.label.uppercased(), color: MatchTheme.textMuted)
-                EmptyStateText(
-                    selectedRole.canProposeReviews
-                    ? "Assistant review proposals come next. For now, this Swift checkpoint is read-only unless you are Referee."
-                    : "Spectator mode is read-only and watches synced match state."
-                )
+                label("SPECTATOR VIEW", color: MatchTheme.textMuted)
+                EmptyStateText("Spectator mode is read-only. It watches synced match state, score, clock, and timeline updates from nearby Ditto peers.")
             }
             .matchCard()
         }
+    }
+
+    private var substitutionControls: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            label("LOG SUBSTITUTION", color: MatchTheme.textMuted)
+
+            Picker("Sub Team", selection: $selectedSubTeam) {
+                ForEach(TeamSide.allCases) { side in
+                    Text(side.teamName).tag(side)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Picker("Player Out", selection: $selectedPlayerOutId) {
+                ForEach(SampleRoster.starters(for: selectedSubTeam)) { player in
+                    Text("↓ \(player.label)").tag(player.id)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(MatchTheme.lime)
+
+            Picker("Player In", selection: $selectedPlayerInId) {
+                ForEach(SampleRoster.bench(for: selectedSubTeam)) { player in
+                    Text("↑ \(player.label)").tag(player.id)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(MatchTheme.lime)
+
+            Button("Log Substitution") {
+                repository.logSubstitution(
+                    teamSide: selectedSubTeam,
+                    playerOutId: selectedPlayerOutId,
+                    playerInId: selectedPlayerInId
+                )
+            }
+            .buttonStyle(SecondaryMatchButtonStyle())
+        }
+    }
+
+    private var reviewQueue: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            label("ASSISTANT REVIEW QUEUE", color: MatchTheme.textMuted)
+
+            if repository.selectedPendingProposals.isEmpty {
+                EmptyStateText("No pending assistant ref proposals.")
+            } else {
+                ForEach(repository.selectedPendingProposals) { proposal in
+                    ProposalCard(
+                        proposal: proposal,
+                        onAccept: { repository.acceptProposal(proposal) },
+                        onReject: { repository.rejectProposal(proposal) }
+                    )
+                }
+            }
+        }
+    }
+
+    private var rostersSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            label("ROSTERS", color: MatchTheme.lime)
+
+            HStack(alignment: .top, spacing: 12) {
+                RosterColumn(
+                    title: "Green FC",
+                    starters: SampleRoster.homeStarters,
+                    bench: SampleRoster.homeBench
+                )
+                RosterColumn(
+                    title: "White FC",
+                    starters: SampleRoster.awayStarters,
+                    bench: SampleRoster.awayBench
+                )
+            }
+        }
+        .matchCard()
     }
 
     private var timelineSection: some View {
@@ -552,6 +700,89 @@ private struct TimelineRow: View {
                 if event.teamSide == TeamSide.home.rawValue {
                     Spacer(minLength: 18)
                 }
+            }
+        }
+    }
+}
+
+private struct ProposalCard: View {
+    let proposal: ReviewProposalSummary
+    let onAccept: () -> Void
+    let onReject: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("\(proposal.minute)'")
+                    .font(.system(size: 12, weight: .black))
+                    .foregroundStyle(MatchTheme.pitchBlack)
+                    .padding(.vertical, 7)
+                    .padding(.horizontal, 12)
+                    .background(MatchTheme.gold, in: Capsule())
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(proposal.label.uppercased())
+                        .font(.system(size: 11, weight: .black))
+                        .tracking(1.0)
+                        .foregroundStyle(MatchTheme.gold)
+                    Text(proposal.subject)
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+
+                Spacer()
+            }
+
+            Text("Proposed by \(proposal.proposedBy)")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(MatchTheme.textSoft)
+
+            HStack(spacing: 10) {
+                Button("Accept") { onAccept() }
+                    .buttonStyle(PrimaryMatchButtonStyle())
+                Button("Reject") { onReject() }
+                    .buttonStyle(DangerMatchButtonStyle())
+            }
+        }
+        .padding(14)
+        .background(MatchTheme.panelRaised, in: RoundedRectangle(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(MatchTheme.borderBright))
+    }
+}
+
+private struct RosterColumn: View {
+    let title: String
+    let starters: [Player]
+    let bench: [Player]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title.uppercased())
+                .font(.system(size: 12, weight: .black))
+                .tracking(1.0)
+                .foregroundStyle(MatchTheme.lime)
+
+            rosterGroup(title: "Starting 18", players: starters)
+            rosterGroup(title: "Bench 7", players: bench)
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .padding(14)
+        .background(MatchTheme.panelRaised, in: RoundedRectangle(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(MatchTheme.border))
+    }
+
+    private func rosterGroup(title: String, players: [Player]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .black))
+                .tracking(1.0)
+                .foregroundStyle(MatchTheme.textMuted)
+
+            ForEach(players.prefix(bench.contains(where: { $0.id == players.first?.id }) ? 7 : 18)) { player in
+                Text(player.label)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(MatchTheme.textSoft)
+                    .lineLimit(1)
             }
         }
     }

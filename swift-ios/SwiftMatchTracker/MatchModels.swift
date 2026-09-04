@@ -20,6 +20,7 @@ enum AppRole: String, CaseIterable, Identifiable {
 
     var canWriteMatch: Bool { self == .referee }
     var canProposeReviews: Bool { self == .assistantReferee }
+    var canReviewProposals: Bool { self == .referee }
 }
 
 enum TeamSide: String, CaseIterable, Identifiable {
@@ -61,6 +62,83 @@ enum MatchAction: String, CaseIterable, Identifiable {
             return "Red Card"
         }
     }
+}
+
+enum ReviewAction: String, CaseIterable, Identifiable {
+    case foul
+    case offside
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .foul:
+            return "Foul"
+        case .offside:
+            return "Offside"
+        }
+    }
+}
+
+struct Player: Identifiable, Equatable {
+    let id: String
+    let number: Int
+    let name: String
+    let side: TeamSide
+    let isBench: Bool
+
+    var label: String {
+        "#\(number) \(name)"
+    }
+}
+
+enum SampleRoster {
+    static let homeStarters = (1...18).map {
+        Player(id: "home-starter-\($0)", number: $0, name: homeNames[$0 - 1], side: .home, isBench: false)
+    }
+
+    static let awayStarters = (1...18).map {
+        Player(id: "away-starter-\($0)", number: $0, name: awayNames[$0 - 1], side: .away, isBench: false)
+    }
+
+    static let homeBench = (19...25).map {
+        Player(id: "home-bench-\($0)", number: $0, name: "Green Sub \($0)", side: .home, isBench: true)
+    }
+
+    static let awayBench = (19...25).map {
+        Player(id: "away-bench-\($0)", number: $0, name: "White Sub \($0)", side: .away, isBench: true)
+    }
+
+    static func starters(for side: TeamSide) -> [Player] {
+        side == .home ? homeStarters : awayStarters
+    }
+
+    static func bench(for side: TeamSide) -> [Player] {
+        side == .home ? homeBench : awayBench
+    }
+
+    static func player(id: String, side: TeamSide, bench: Bool = false) -> Player {
+        let players = bench ? Self.bench(for: side) : Self.starters(for: side)
+        return players.first { $0.id == id } ?? players.first ?? Player(
+            id: "\(side.rawValue)-fallback",
+            number: 7,
+            name: side == .home ? "A. Khan" : "R. Ahmed",
+            side: side,
+            isBench: bench
+        )
+    }
+
+    private static let homeNames = [
+        "A. Khan", "M. Ali", "J. Reed", "S. Patel", "O. Mensah", "T. Brooks",
+        "N. Silva", "L. Chen", "I. Hassan", "D. Morgan", "R. Singh", "P. Novak",
+        "E. Stone", "Y. Park", "C. Wright", "F. Diaz", "H. Omar", "B. Cole"
+    ]
+
+    private static let awayNames = [
+        "R. Ahmed", "K. Jones", "V. Rossi", "A. Smith", "M. Lopez", "J. Kim",
+        "S. Williams", "D. Nguyen", "L. Brown", "P. Garcia", "E. Wilson", "N. Patel",
+        "O. Davis", "T. Evans", "H. Martin", "C. Young", "Z. Malik", "B. Turner"
+    ]
 }
 
 struct MatchSummary: Identifiable, Equatable {
@@ -180,6 +258,10 @@ struct MatchEventSummary: Identifiable, Equatable {
     let playerName: String?
     let playerNumber: Int?
     let teamSide: String?
+    let playerOutName: String?
+    let playerOutNumber: Int?
+    let playerInName: String?
+    let playerInNumber: Int?
 
     var label: String {
         switch type {
@@ -205,6 +287,13 @@ struct MatchEventSummary: Identifiable, Equatable {
     }
 
     var subject: String {
+        if type == "substitution",
+           let playerOutName,
+           let playerOutNumber,
+           let playerInName,
+           let playerInNumber {
+            return "\(teamName) ↓ #\(playerOutNumber) \(playerOutName)  ↑ #\(playerInNumber) \(playerInName)"
+        }
         if let playerName, let playerNumber {
             return "\(teamName) #\(playerNumber) — \(playerName)"
         }
@@ -224,6 +313,83 @@ struct MatchEventSummary: Identifiable, Equatable {
         self.playerName = json.optionalString("playerName")
         self.playerNumber = json.optionalInt("playerNumber")
         self.teamSide = json.optionalString("teamSide")
+        self.playerOutName = json.optionalString("playerOutName")
+        self.playerOutNumber = json.optionalInt("playerOutNumber")
+        self.playerInName = json.optionalString("playerInName")
+        self.playerInNumber = json.optionalInt("playerInNumber")
+    }
+}
+
+struct ReviewProposalSummary: Identifiable, Equatable {
+    let id: String
+    let matchId: String
+    let type: String
+    let status: String
+    let teamName: String
+    let teamSide: String
+    let playerName: String
+    let playerNumber: Int
+    let minute: Int
+    let createdAtMillis: Int
+    let proposedBy: String
+
+    var label: String {
+        switch type {
+        case "offside":
+            return "Offside review"
+        case "foul":
+            return "Foul review"
+        default:
+            return "Review"
+        }
+    }
+
+    var subject: String {
+        "\(teamName) #\(playerNumber) — \(playerName)"
+    }
+
+    init?(_ data: Data) {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        self.id = json.string("_id", fallback: "unknown-proposal")
+        self.matchId = json.string("matchId")
+        self.type = json.string("type", fallback: "foul")
+        self.status = json.string("status", fallback: "pending")
+        self.teamName = json.string("teamName", fallback: "Unknown team")
+        self.teamSide = json.string("teamSide", fallback: TeamSide.home.rawValue)
+        self.playerName = json.string("playerName", fallback: "Unknown player")
+        self.playerNumber = json.int("playerNumber")
+        self.minute = json.int("minute")
+        self.createdAtMillis = json.int("createdAtMillis")
+        self.proposedBy = json.string("proposedBy", fallback: "Assistant Ref")
+    }
+}
+
+struct MatchParticipantSummary: Identifiable, Equatable {
+    let id: String
+    let matchId: String
+    let role: String
+    let displayName: String
+    let lastSeenMillis: Int
+
+    var isReferee: Bool {
+        role == AppRole.referee.rawValue
+    }
+
+    func isFresh(at nowMillis: Int, freshnessWindowMillis: Int = 15_000) -> Bool {
+        nowMillis - lastSeenMillis <= freshnessWindowMillis
+    }
+
+    init?(_ data: Data) {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        self.id = json.string("_id", fallback: "unknown-participant")
+        self.matchId = json.string("matchId")
+        self.role = json.string("role", fallback: AppRole.spectator.rawValue)
+        self.displayName = json.string("displayName", fallback: "Swift iOS")
+        self.lastSeenMillis = json.int("lastSeenMillis")
     }
 }
 

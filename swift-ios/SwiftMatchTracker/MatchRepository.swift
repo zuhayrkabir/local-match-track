@@ -1,15 +1,23 @@
 import DittoSwift
 import Foundation
+import UIKit
 
 @MainActor
 final class MatchRepository: ObservableObject {
     @Published private(set) var matches: [MatchSummary] = []
     @Published private(set) var events: [MatchEventSummary] = []
+    @Published private(set) var proposals: [ReviewProposalSummary] = []
+    @Published private(set) var participants: [MatchParticipantSummary] = []
     @Published var selectedMatchId: String?
 
     private var ditto: Ditto? { DittoManager.shared.ditto }
     private var subscriptions: [DittoSyncSubscription] = []
     private var observers: [DittoStoreObserver] = []
+    private let participantId = UserDefaults.standard.string(forKey: "swiftMatchTrackerParticipantId") ?? {
+        let id = "swift-ios-\(UUID().uuidString)"
+        UserDefaults.standard.set(id, forKey: "swiftMatchTrackerParticipantId")
+        return id
+    }()
 
     var selectedMatch: MatchSummary? {
         matches.first { $0.id == selectedMatchId } ?? matches.first
@@ -20,6 +28,25 @@ final class MatchRepository: ObservableObject {
         return events
             .filter { $0.matchId == selectedMatch.id }
             .sorted { $0.createdAtMillis < $1.createdAtMillis }
+    }
+
+    var selectedPendingProposals: [ReviewProposalSummary] {
+        guard let selectedMatch else { return [] }
+        return proposals
+            .filter { $0.matchId == selectedMatch.id && $0.status == "pending" }
+            .sorted { $0.createdAtMillis < $1.createdAtMillis }
+    }
+
+    var selectedParticipants: [MatchParticipantSummary] {
+        guard let selectedMatch else { return [] }
+        return participants
+            .filter { $0.matchId == selectedMatch.id }
+            .sorted { $0.lastSeenMillis > $1.lastSeenMillis }
+    }
+
+    var isRefereeOnlineForSelectedMatch: Bool {
+        let now = nowMillis()
+        return selectedParticipants.contains { $0.isReferee && $0.isFresh(at: now) }
     }
 
     func start() {
@@ -52,6 +79,18 @@ final class MatchRepository: ObservableObject {
                     Task { @MainActor [weak self] in
                         self?.events = mapped
                     }
+                },
+                try ditto.store.registerObserver(query: "SELECT * FROM match_review_proposals ORDER BY createdAtMillis DESC") { [weak self] result in
+                    let mapped = result.items.compactMap { ReviewProposalSummary($0.jsonData()) }
+                    Task { @MainActor [weak self] in
+                        self?.proposals = mapped
+                    }
+                },
+                try ditto.store.registerObserver(query: "SELECT * FROM match_participants") { [weak self] result in
+                    let mapped = result.items.compactMap { MatchParticipantSummary($0.jsonData()) }
+                    Task { @MainActor [weak self] in
+                        self?.participants = mapped
+                    }
                 }
             ]
         } catch {
@@ -83,6 +122,7 @@ final class MatchRepository: ObservableObject {
                     arguments: ["match": match]
                 )
                 selectedMatchId = id
+                publishPresence(role: .referee)
             } catch {
                 print("createMatch failed: \(error.localizedDescription)")
             }
@@ -172,7 +212,7 @@ final class MatchRepository: ObservableObject {
         Task {
             guard let ditto, let match = selectedMatch else { return }
             let now = nowMillis()
-            let player = playerFor(teamSide)
+            let player = SampleRoster.starters(for: teamSide).first ?? fallbackPlayer(for: teamSide)
             do {
                 try await ditto.store.execute(
                     query: """
@@ -195,6 +235,151 @@ final class MatchRepository: ObservableObject {
                 )
             } catch {
                 print("logEvent failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func logSubstitution(teamSide: TeamSide, playerOutId: String, playerInId: String) {
+        Task {
+            guard let ditto, let match = selectedMatch else { return }
+            let now = nowMillis()
+            let playerOut = SampleRoster.player(id: playerOutId, side: teamSide)
+            let playerIn = SampleRoster.player(id: playerInId, side: teamSide, bench: true)
+
+            do {
+                try await ditto.store.execute(
+                    query: """
+                    INSERT INTO match_events DOCUMENTS (:event)
+                    ON ID CONFLICT DO UPDATE_LOCAL_DIFF
+                    """,
+                    arguments: [
+                        "event": [
+                            "_id": "swift-event-\(now)-\(UUID().uuidString.prefix(8))",
+                            "matchId": match.id,
+                            "type": "substitution",
+                            "teamName": teamSide.teamName,
+                            "minute": match.matchMinuteAt(now),
+                            "createdAtMillis": now,
+                            "playerOutName": playerOut.name,
+                            "playerOutNumber": playerOut.number,
+                            "playerInName": playerIn.name,
+                            "playerInNumber": playerIn.number,
+                            "teamSide": teamSide.rawValue
+                        ]
+                    ]
+                )
+            } catch {
+                print("logSubstitution failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func publishPresence(role: AppRole) {
+        Task {
+            guard let ditto, let match = selectedMatch else { return }
+            let now = nowMillis()
+            let participant: [String: Any] = [
+                "_id": "\(match.id)-\(participantId)",
+                "matchId": match.id,
+                "participantId": participantId,
+                "role": role.rawValue,
+                "displayName": "\(UIDevice.current.name) Swift \(role.label)",
+                "platform": "swift-ios",
+                "lastSeenMillis": now
+            ]
+
+            do {
+                try await ditto.store.execute(
+                    query: """
+                    INSERT INTO match_participants DOCUMENTS (:participant)
+                    ON ID CONFLICT DO UPDATE_LOCAL_DIFF
+                    """,
+                    arguments: ["participant": participant]
+                )
+            } catch {
+                print("publishPresence failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func proposeReview(_ action: ReviewAction, teamSide: TeamSide, playerId: String) {
+        guard isRefereeOnlineForSelectedMatch else {
+            return
+        }
+
+        Task {
+            guard let ditto, let match = selectedMatch else { return }
+            let now = nowMillis()
+            let player = SampleRoster.player(id: playerId, side: teamSide)
+
+            do {
+                try await ditto.store.execute(
+                    query: """
+                    INSERT INTO match_review_proposals DOCUMENTS (:proposal)
+                    ON ID CONFLICT DO UPDATE_LOCAL_DIFF
+                    """,
+                    arguments: [
+                        "proposal": [
+                            "_id": "swift-proposal-\(now)-\(UUID().uuidString.prefix(8))",
+                            "matchId": match.id,
+                            "type": action.rawValue,
+                            "status": "pending",
+                            "teamName": teamSide.teamName,
+                            "teamSide": teamSide.rawValue,
+                            "playerName": player.name,
+                            "playerNumber": player.number,
+                            "minute": match.matchMinuteAt(now),
+                            "createdAtMillis": now,
+                            "proposedBy": "\(UIDevice.current.name) Assistant Ref"
+                        ]
+                    ]
+                )
+            } catch {
+                print("proposeReview failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func acceptProposal(_ proposal: ReviewProposalSummary) {
+        Task {
+            guard let ditto else { return }
+            let now = nowMillis()
+
+            do {
+                try await ditto.store.execute(
+                    query: """
+                    INSERT INTO match_events DOCUMENTS (:event)
+                    ON ID CONFLICT DO UPDATE_LOCAL_DIFF
+                    """,
+                    arguments: [
+                        "event": [
+                            "_id": "swift-event-\(now)-\(UUID().uuidString.prefix(8))",
+                            "matchId": proposal.matchId,
+                            "type": proposal.type,
+                            "teamName": proposal.teamName,
+                            "minute": proposal.minute,
+                            "createdAtMillis": now,
+                            "playerName": proposal.playerName,
+                            "playerNumber": proposal.playerNumber,
+                            "teamSide": proposal.teamSide,
+                            "acceptedFromProposalId": proposal.id
+                        ]
+                    ]
+                )
+                try await updateProposal(proposal, status: "accepted", reviewedAtMillis: now)
+            } catch {
+                print("acceptProposal failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func rejectProposal(_ proposal: ReviewProposalSummary) {
+        Task {
+            let now = nowMillis()
+            do {
+                try await updateProposal(proposal, status: "rejected", reviewedAtMillis: now)
+            } catch {
+                print("rejectProposal failed: \(error.localizedDescription)")
             }
         }
     }
@@ -250,12 +435,43 @@ final class MatchRepository: ObservableObject {
         Int(Date().timeIntervalSince1970 * 1_000)
     }
 
-    private func playerFor(_ side: TeamSide) -> (name: String, number: Int) {
-        switch side {
-        case .home:
-            return ("A. Khan", 7)
-        case .away:
-            return ("R. Ahmed", 7)
-        }
+    private func updateProposal(
+        _ proposal: ReviewProposalSummary,
+        status: String,
+        reviewedAtMillis: Int
+    ) async throws {
+        guard let ditto else { return }
+        try await ditto.store.execute(
+            query: """
+            INSERT INTO match_review_proposals DOCUMENTS (:proposal)
+            ON ID CONFLICT DO UPDATE_LOCAL_DIFF
+            """,
+            arguments: [
+                "proposal": [
+                    "_id": proposal.id,
+                    "matchId": proposal.matchId,
+                    "type": proposal.type,
+                    "status": status,
+                    "teamName": proposal.teamName,
+                    "teamSide": proposal.teamSide,
+                    "playerName": proposal.playerName,
+                    "playerNumber": proposal.playerNumber,
+                    "minute": proposal.minute,
+                    "createdAtMillis": proposal.createdAtMillis,
+                    "reviewedAtMillis": reviewedAtMillis,
+                    "proposedBy": proposal.proposedBy
+                ]
+            ]
+        )
+    }
+
+    private func fallbackPlayer(for side: TeamSide) -> Player {
+        Player(
+            id: "\(side.rawValue)-fallback",
+            number: 7,
+            name: side == .home ? "A. Khan" : "R. Ahmed",
+            side: side,
+            isBench: false
+        )
     }
 }
