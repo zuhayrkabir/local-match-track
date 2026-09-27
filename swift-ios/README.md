@@ -4,7 +4,7 @@ This folder is the native Swift/iOS checkpoint for the same local-first soccer a
 
 The purpose is to learn Ditto from the Swift SDK directly while keeping the monorepo structure clean:
 
-- Flutter app at the repo root
+- Flutter app in `flutter/`
 - Kotlin Android app in `kotlin-android/`
 - Swift iOS app in `swift-ios/`
 
@@ -90,6 +90,19 @@ Then:
 5. Change the bundle identifier if needed.
 6. Select an iPhone or iOS simulator.
 7. Run.
+
+For a compile-only check without device signing, build the arm64 iOS Simulator
+target from the repo root:
+
+```bash
+xcodebuild -project swift-ios/SwiftMatchTracker.xcodeproj \
+  -scheme SwiftMatchTracker \
+  -destination 'generic/platform=iOS Simulator' \
+  -configuration Debug \
+  ARCHS=arm64 \
+  ONLY_ACTIVE_ARCH=YES \
+  build
+```
 
 ## Why this app uses the same collections
 

@@ -38,11 +38,16 @@ From the repo root:
 ```bash
 JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
 ANDROID_HOME="/Users/zuhayrkabir/Library/Android/sdk" \
-./android/gradlew -p kotlin-android :app:installDebug \
+./flutter/android/gradlew -p kotlin-android :app:installDebug \
   -PDITTO_DATABASE_ID="your-database-id" \
   -PDITTO_SERVER_URL="https://your-ditto-server-url" \
   -PDITTO_PLAYGROUND_TOKEN="your-playground-token"
 ```
+
+In the current monorepo layout, this command uses the local Flutter Android
+Gradle wrapper. For a public/example-app release, this should eventually become
+a dedicated root Gradle wrapper so the Kotlin app does not depend on the
+Flutter folder.
 
 Then open **Kotlin Match Tracker** on the Android device.
 
