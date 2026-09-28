@@ -10,9 +10,9 @@ This pass has two modes:
 - dashboard UI mirrors the Flutter broadcast-style theme;
 - shared match projection code understands the same `matches` and `match_events` document fields;
 - sample data proves the dashboard, score, and timeline layout without opening Ditto;
-- optional demo Ditto Server mode opens a browser Ditto peer, reads real `matches` / `match_events`, and can create or rename matches.
+- optional demo Ditto Server mode opens a browser Ditto peer, reads real `matches` / `match_events`, creates or renames matches, and logs basic official events.
 
-Demo Ditto Server mode now performs a small, controlled set of writes. It can create matches and rename the selected match, but it does **not** yet log referee events, run match clocks, or manage roles from the browser.
+Demo Ditto Server mode now performs a small, controlled set of writes. It can create matches, rename the selected match, and log basic goal/foul/card/offside events. It does **not** yet run match clocks, manage player rosters, or manage referee/assistant/spectator roles from the browser.
 
 ## Why React Web only?
 
@@ -42,7 +42,7 @@ VITE_DEMO_DITTO_SERVER_URL="https://your-ditto-server-url"
 VITE_DEMO_DITTO_PLAYGROUND_TOKEN="your-disposable-development-token"
 ```
 
-Then run `npm run dev` and select **Demo Ditto Server** in the app. The browser will show live synced matches and expose the first write controls: create match and rename selected match.
+Then run `npm run dev` and select **Demo Ditto Server** in the app. The browser will show live synced matches and expose the first write controls: create match, rename selected match, and log basic official events.
 
 ## Validate
 

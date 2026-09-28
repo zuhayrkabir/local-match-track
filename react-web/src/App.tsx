@@ -14,13 +14,26 @@ import {
 } from './domain/matchProjection'
 import type {
   MatchDocument,
+  MatchEventType,
   MatchEventDocument,
   MatchSummary,
+  TeamSide,
 } from './domain/matchTypes'
 import { sampleEvents, sampleMatches } from './sampleData'
 import { createDemoDitto } from './services/createDemoDitto'
 
 type AppMode = 'sample' | 'ditto'
+type LoggableEventType = Extract<
+  MatchEventType,
+  'goal' | 'foul' | 'yellowCard' | 'redCard' | 'offside'
+>
+
+type MatchEventInput = {
+  matchId: string
+  type: LoggableEventType
+  teamSide: TeamSide
+  minute: number
+}
 
 export default function App() {
   const [mode, setMode] = useState<AppMode>('sample')
@@ -226,10 +239,44 @@ function DittoBackedDashboard({
     }
   }
 
+  async function logMatchEvent(input: MatchEventInput) {
+    if (!ditto) return
+
+    setWriteStatus(`Logging ${eventLabel(input.type).toLowerCase()}…`)
+    setWriteError(undefined)
+
+    try {
+      const now = Date.now()
+      const event: MatchEventDocument = {
+        _id: crypto.randomUUID(),
+        matchId: input.matchId,
+        type: input.type,
+        teamSide: input.teamSide,
+        teamName: input.teamSide === 'home' ? 'Home' : 'Away',
+        minute: input.minute,
+        createdAtMillis: now,
+      }
+
+      await ditto.store.execute(
+        'INSERT INTO match_events DOCUMENTS (:event) ON ID CONFLICT DO UPDATE',
+        { event },
+      )
+      await ditto.store.execute(
+        'UPDATE matches SET updatedAtMillis = :updatedAtMillis WHERE _id = :matchId',
+        { matchId: input.matchId, updatedAtMillis: now },
+      )
+      setWriteStatus(`Logged ${eventLabel(input.type).toLowerCase()}.`)
+    } catch (error) {
+      setWriteStatus(undefined)
+      setWriteError(String(error))
+    }
+  }
+
   return (
     <Dashboard
       canWrite
       onCreateMatch={createMatch}
+      onLogMatchEvent={logMatchEvent}
       onRenameMatch={renameMatch}
       peerCount={peerCount}
       sourceLabel={isLoading ? 'Loading' : 'Ditto'}
@@ -246,6 +293,7 @@ function Dashboard({
   sourceLabel,
   canWrite = false,
   onCreateMatch,
+  onLogMatchEvent,
   onRenameMatch,
   writeStatus,
   writeError,
@@ -255,6 +303,7 @@ function Dashboard({
   sourceLabel: string
   canWrite?: boolean
   onCreateMatch?: (name: string) => Promise<void>
+  onLogMatchEvent?: (input: MatchEventInput) => Promise<void>
   onRenameMatch?: (matchId: string, name: string) => Promise<void>
   writeStatus?: string
   writeError?: string
@@ -274,6 +323,7 @@ function Dashboard({
       <MatchOperations
         canWrite={canWrite}
         onCreateMatch={onCreateMatch}
+        onLogMatchEvent={onLogMatchEvent}
         onRenameMatch={onRenameMatch}
         selectedMatch={selectedMatch}
         writeError={writeError}
@@ -297,6 +347,7 @@ function MatchOperations({
   canWrite,
   selectedMatch,
   onCreateMatch,
+  onLogMatchEvent,
   onRenameMatch,
   writeStatus,
   writeError,
@@ -304,12 +355,16 @@ function MatchOperations({
   canWrite: boolean
   selectedMatch?: MatchSummary
   onCreateMatch?: (name: string) => Promise<void>
+  onLogMatchEvent?: (input: MatchEventInput) => Promise<void>
   onRenameMatch?: (matchId: string, name: string) => Promise<void>
   writeStatus?: string
   writeError?: string
 }) {
   const [newMatchName, setNewMatchName] = useState('')
   const [renameValue, setRenameValue] = useState('')
+  const [eventType, setEventType] = useState<LoggableEventType>('goal')
+  const [teamSide, setTeamSide] = useState<TeamSide>('home')
+  const [eventMinute, setEventMinute] = useState('')
   const [isSaving, setIsSaving] = useState(false)
 
   const currentName = selectedMatch?.match.name ?? ''
@@ -341,6 +396,28 @@ function MatchOperations({
     try {
       await onRenameMatch(selectedMatch.match._id, trimmedName)
       setRenameValue('')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function handleLogEvent() {
+    if (!selectedMatch || !onLogMatchEvent) return
+
+    const parsedMinute = Number.parseInt(eventMinute, 10)
+    const minute = Number.isFinite(parsedMinute)
+      ? Math.max(0, Math.min(parsedMinute, 130))
+      : Math.max(0, Math.floor(selectedMatch.match.elapsedSeconds / 60))
+
+    setIsSaving(true)
+    try {
+      await onLogMatchEvent({
+        matchId: selectedMatch.match._id,
+        type: eventType,
+        teamSide,
+        minute,
+      })
+      setEventMinute('')
     } finally {
       setIsSaving(false)
     }
@@ -387,6 +464,65 @@ function MatchOperations({
             Rename selected
           </button>
         </label>
+      </div>
+
+      <div className="event-logger">
+        <div>
+          <p className="eyebrow">Official event</p>
+          <h3>Log selected match event</h3>
+        </div>
+        <div className="event-logger-grid">
+          <label>
+            <span>Event</span>
+            <select
+              disabled={!canWrite || isSaving || !selectedMatch}
+              onChange={(event) =>
+                setEventType(event.target.value as LoggableEventType)
+              }
+              value={eventType}
+            >
+              <option value="goal">Goal</option>
+              <option value="foul">Foul</option>
+              <option value="yellowCard">Yellow card</option>
+              <option value="redCard">Red card</option>
+              <option value="offside">Offside</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Team</span>
+            <select
+              disabled={!canWrite || isSaving || !selectedMatch}
+              onChange={(event) => setTeamSide(event.target.value as TeamSide)}
+              value={teamSide}
+            >
+              <option value="home">Home</option>
+              <option value="away">Away</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Minute</span>
+            <input
+              disabled={!canWrite || isSaving || !selectedMatch}
+              inputMode="numeric"
+              max="130"
+              min="0"
+              onChange={(event) => setEventMinute(event.target.value)}
+              placeholder="Auto"
+              type="number"
+              value={eventMinute}
+            />
+          </label>
+
+          <button
+            disabled={!canWrite || isSaving || !selectedMatch}
+            onClick={handleLogEvent}
+            type="button"
+          >
+            Log event
+          </button>
+        </div>
       </div>
 
       {!canWrite && (

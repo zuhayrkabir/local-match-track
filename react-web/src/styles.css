@@ -179,7 +179,9 @@ button {
   text-transform: uppercase;
 }
 
-.operation-grid input {
+.operation-grid input,
+.event-logger input,
+.event-logger select {
   border: 1px solid var(--border);
   border-radius: 18px;
   background: rgba(247, 242, 223, 0.1);
@@ -189,21 +191,27 @@ button {
   width: 100%;
 }
 
-.operation-grid input::placeholder {
+.operation-grid input::placeholder,
+.event-logger input::placeholder {
   color: rgba(247, 242, 223, 0.42);
 }
 
-.operation-grid input:focus {
+.operation-grid input:focus,
+.event-logger input:focus,
+.event-logger select:focus {
   border-color: rgba(247, 201, 72, 0.7);
   box-shadow: 0 0 0 4px rgba(247, 201, 72, 0.12);
   outline: none;
 }
 
-.operation-grid input:disabled {
+.operation-grid input:disabled,
+.event-logger input:disabled,
+.event-logger select:disabled {
   opacity: 0.52;
 }
 
-.operation-grid button {
+.operation-grid button,
+.event-logger button {
   border: 1px solid rgba(247, 201, 72, 0.72);
   border-radius: 999px;
   background: rgba(247, 201, 72, 0.15);
@@ -214,14 +222,54 @@ button {
 }
 
 .operation-grid button:hover:not(:disabled),
-.operation-grid button:focus-visible:not(:disabled) {
+.operation-grid button:focus-visible:not(:disabled),
+.event-logger button:hover:not(:disabled),
+.event-logger button:focus-visible:not(:disabled) {
   background: rgba(247, 201, 72, 0.28);
   outline: none;
 }
 
-.operation-grid button:disabled {
+.operation-grid button:disabled,
+.event-logger button:disabled {
   cursor: not-allowed;
   opacity: 0.48;
+}
+
+.event-logger {
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: rgba(247, 242, 223, 0.055);
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.event-logger h3 {
+  margin: 0;
+}
+
+.event-logger-grid {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1.2fr 1fr 0.8fr auto;
+}
+
+.event-logger label {
+  display: grid;
+  gap: 10px;
+}
+
+.event-logger label > span {
+  color: var(--gold);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.event-logger select {
+  appearance: none;
 }
 
 .operation-note {
@@ -420,6 +468,10 @@ button {
   }
 
   .operation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .event-logger-grid {
     grid-template-columns: 1fr;
   }
 
