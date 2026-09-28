@@ -31,7 +31,10 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 **/build/
+**/dist/
 **/coverage/
+**/node_modules/
+**/*.tsbuildinfo
 
 # Symbolication related
 app.*.symbols
