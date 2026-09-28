@@ -16,6 +16,8 @@ import type {
   MatchDocument,
   MatchEventType,
   MatchEventDocument,
+  MatchHalf,
+  MatchStatus,
   MatchSummary,
   TeamSide,
 } from './domain/matchTypes'
@@ -33,6 +35,13 @@ type MatchEventInput = {
   type: LoggableEventType
   teamSide: TeamSide
   minute: number
+}
+
+type MatchSessionInput = {
+  matchId: string
+  half: MatchHalf
+  elapsedSeconds: number
+  action: 'start' | 'end'
 }
 
 export default function App() {
@@ -272,12 +281,66 @@ function DittoBackedDashboard({
     }
   }
 
+  async function updateMatchSession(input: MatchSessionInput) {
+    if (!ditto) return
+
+    const isStart = input.action === 'start'
+    const halfLabel = input.half === 'first' ? 'first half' : 'second half'
+
+    setWriteStatus(`${isStart ? 'Starting' : 'Ending'} ${halfLabel}…`)
+    setWriteError(undefined)
+
+    try {
+      const now = Date.now()
+      const nextStatus = nextMatchStatus(input.action, input.half)
+
+      await ditto.store.execute(
+        [
+          'UPDATE matches',
+          'SET status = :status,',
+          'selectedHalf = :selectedHalf,',
+          'elapsedSeconds = :elapsedSeconds,',
+          'clockStartedAtMillis = :clockStartedAtMillis,',
+          'updatedAtMillis = :updatedAtMillis',
+          'WHERE _id = :matchId',
+        ].join(' '),
+        {
+          matchId: input.matchId,
+          status: nextStatus,
+          selectedHalf: input.half,
+          elapsedSeconds: input.elapsedSeconds,
+          clockStartedAtMillis: isStart ? now : 0,
+          updatedAtMillis: now,
+        },
+      )
+
+      const event: MatchEventDocument = {
+        _id: crypto.randomUUID(),
+        matchId: input.matchId,
+        type: isStart ? 'halfStarted' : 'halfEnded',
+        teamName: halfLabel,
+        minute: Math.max(0, Math.floor(input.elapsedSeconds / 60)),
+        createdAtMillis: now,
+      }
+
+      await ditto.store.execute(
+        'INSERT INTO match_events DOCUMENTS (:event) ON ID CONFLICT DO UPDATE',
+        { event },
+      )
+      setWriteStatus(`${isStart ? 'Started' : 'Ended'} ${halfLabel}.`)
+    } catch (error) {
+      setWriteStatus(undefined)
+      setWriteError(String(error))
+    }
+  }
+
   return (
     <Dashboard
       canWrite
       onCreateMatch={createMatch}
       onLogMatchEvent={logMatchEvent}
       onRenameMatch={renameMatch}
+      onUpdateMatchSession={updateMatchSession}
       peerCount={peerCount}
       sourceLabel={isLoading ? 'Loading' : 'Ditto'}
       summaries={summaries}
@@ -295,6 +358,7 @@ function Dashboard({
   onCreateMatch,
   onLogMatchEvent,
   onRenameMatch,
+  onUpdateMatchSession,
   writeStatus,
   writeError,
 }: {
@@ -305,6 +369,7 @@ function Dashboard({
   onCreateMatch?: (name: string) => Promise<void>
   onLogMatchEvent?: (input: MatchEventInput) => Promise<void>
   onRenameMatch?: (matchId: string, name: string) => Promise<void>
+  onUpdateMatchSession?: (input: MatchSessionInput) => Promise<void>
   writeStatus?: string
   writeError?: string
 }) {
@@ -325,6 +390,7 @@ function Dashboard({
         onCreateMatch={onCreateMatch}
         onLogMatchEvent={onLogMatchEvent}
         onRenameMatch={onRenameMatch}
+        onUpdateMatchSession={onUpdateMatchSession}
         selectedMatch={selectedMatch}
         writeError={writeError}
         writeStatus={writeStatus}
@@ -349,6 +415,7 @@ function MatchOperations({
   onCreateMatch,
   onLogMatchEvent,
   onRenameMatch,
+  onUpdateMatchSession,
   writeStatus,
   writeError,
 }: {
@@ -357,6 +424,7 @@ function MatchOperations({
   onCreateMatch?: (name: string) => Promise<void>
   onLogMatchEvent?: (input: MatchEventInput) => Promise<void>
   onRenameMatch?: (matchId: string, name: string) => Promise<void>
+  onUpdateMatchSession?: (input: MatchSessionInput) => Promise<void>
   writeStatus?: string
   writeError?: string
 }) {
@@ -418,6 +486,38 @@ function MatchOperations({
         minute,
       })
       setEventMinute('')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function handleSessionAction(action: MatchSessionInput['action']) {
+    if (!selectedMatch || !onUpdateMatchSession) return
+
+    setIsSaving(true)
+    try {
+      await onUpdateMatchSession({
+        action,
+        elapsedSeconds: selectedMatch.match.elapsedSeconds,
+        half: selectedMatch.match.selectedHalf,
+        matchId: selectedMatch.match._id,
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function handleStartHalf(half: MatchHalf) {
+    if (!selectedMatch || !onUpdateMatchSession) return
+
+    setIsSaving(true)
+    try {
+      await onUpdateMatchSession({
+        action: 'start',
+        elapsedSeconds: half === 'first' ? 0 : 45 * 60,
+        half,
+        matchId: selectedMatch.match._id,
+      })
     } finally {
       setIsSaving(false)
     }
@@ -525,6 +625,40 @@ function MatchOperations({
         </div>
       </div>
 
+      <div className="session-controls">
+        <div>
+          <p className="eyebrow">Match session</p>
+          <h3>Start or end the selected half</h3>
+          <p>
+            Current state: {selectedMatch?.statusLabel ?? 'No match selected'} ·{' '}
+            {selectedMatch ? clockLabel(selectedMatch.match) : '--:--'}
+          </p>
+        </div>
+        <div className="session-action-grid">
+          <button
+            disabled={!canWrite || isSaving || !selectedMatch}
+            onClick={() => handleStartHalf('first')}
+            type="button"
+          >
+            Start first half
+          </button>
+          <button
+            disabled={!canWrite || isSaving || !selectedMatch}
+            onClick={() => handleStartHalf('second')}
+            type="button"
+          >
+            Start second half
+          </button>
+          <button
+            disabled={!canWrite || isSaving || !selectedMatch}
+            onClick={() => handleSessionAction('end')}
+            type="button"
+          >
+            End current half
+          </button>
+        </div>
+      </div>
+
       {!canWrite && (
         <p className="operation-note">
           Switch to Demo Ditto Server mode to enable browser writes.
@@ -534,6 +668,17 @@ function MatchOperations({
       {writeError && <p className="operation-note error">{writeError}</p>}
     </section>
   )
+}
+
+function nextMatchStatus(
+  action: MatchSessionInput['action'],
+  half: MatchHalf,
+): MatchStatus {
+  if (action === 'start') {
+    return half === 'first' ? 'firstHalf' : 'secondHalf'
+  }
+
+  return half === 'first' ? 'halftime' : 'fullTime'
 }
 
 function StatusCard({

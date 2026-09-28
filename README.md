@@ -132,7 +132,7 @@ React Web starts in sample-data mode. To try demo Ditto Server mode, add
 `VITE_DEMO_DITTO_DATABASE_ID`, `VITE_DEMO_DITTO_SERVER_URL`, and
 `VITE_DEMO_DITTO_PLAYGROUND_TOKEN` to the repo-root `.env` with a disposable
 development token. In demo mode, React Web can create matches, rename the
-selected match, and log basic goal/foul/card/offside events.
+selected match, start/end halves, and log basic goal/foul/card/offside events.
 
 ## Validation without physical devices
 
@@ -149,7 +149,7 @@ Physical devices are still required before claiming Bluetooth, LAN, peer-to-peer
 
 ## Known limitations
 
-- React Web's Ditto Server mode is demo-only and currently limited to dashboard reads, create/rename match writes, and basic event logging; production browser auth still needs a token-exchange/proxy design.
+- React Web's Ditto Server mode is demo-only and currently limited to dashboard reads, create/rename match writes, start/end half controls, and basic event logging; production browser auth still needs a token-exchange/proxy design.
 - Flutter remains the hero UI; Kotlin and Swift are native SDK checkpoints with similar workflows but less visual polish.
 - Assistant/referee role authorization is demo-level UI logic, not hardened production auth.
 - Duplicate event detection and conflict test harnesses are not implemented yet.

@@ -12,7 +12,7 @@ This pass has two modes:
 - sample data proves the dashboard, score, and timeline layout without opening Ditto;
 - optional demo Ditto Server mode opens a browser Ditto peer, reads real `matches` / `match_events`, creates or renames matches, and logs basic official events.
 
-Demo Ditto Server mode now performs a small, controlled set of writes. It can create matches, rename the selected match, and log basic goal/foul/card/offside events. It does **not** yet run match clocks, manage player rosters, or manage referee/assistant/spectator roles from the browser.
+Demo Ditto Server mode now performs a controlled set of writes. It can create matches, rename the selected match, start/end halves, and log basic goal/foul/card/offside events. It does **not** yet run a live ticking browser clock, manage player rosters, or manage referee/assistant/spectator roles from the browser.
 
 ## Why React Web only?
 
@@ -42,7 +42,7 @@ VITE_DEMO_DITTO_SERVER_URL="https://your-ditto-server-url"
 VITE_DEMO_DITTO_PLAYGROUND_TOKEN="your-disposable-development-token"
 ```
 
-Then run `npm run dev` and select **Demo Ditto Server** in the app. The browser will show live synced matches and expose the first write controls: create match, rename selected match, and log basic official events.
+Then run `npm run dev` and select **Demo Ditto Server** in the app. The browser will show live synced matches and expose the first write controls: create match, rename selected match, start/end halves, and log basic official events.
 
 ## Validate
 

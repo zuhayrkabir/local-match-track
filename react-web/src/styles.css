@@ -211,7 +211,8 @@ button {
 }
 
 .operation-grid button,
-.event-logger button {
+.event-logger button,
+.session-controls button {
   border: 1px solid rgba(247, 201, 72, 0.72);
   border-radius: 999px;
   background: rgba(247, 201, 72, 0.15);
@@ -224,18 +225,22 @@ button {
 .operation-grid button:hover:not(:disabled),
 .operation-grid button:focus-visible:not(:disabled),
 .event-logger button:hover:not(:disabled),
-.event-logger button:focus-visible:not(:disabled) {
+.event-logger button:focus-visible:not(:disabled),
+.session-controls button:hover:not(:disabled),
+.session-controls button:focus-visible:not(:disabled) {
   background: rgba(247, 201, 72, 0.28);
   outline: none;
 }
 
 .operation-grid button:disabled,
-.event-logger button:disabled {
+.event-logger button:disabled,
+.session-controls button:disabled {
   cursor: not-allowed;
   opacity: 0.48;
 }
 
-.event-logger {
+.event-logger,
+.session-controls {
   border: 1px solid var(--border);
   border-radius: 24px;
   background: rgba(247, 242, 223, 0.055);
@@ -244,8 +249,15 @@ button {
   padding: 18px;
 }
 
-.event-logger h3 {
+.event-logger h3,
+.session-controls h3 {
   margin: 0;
+}
+
+.session-action-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .event-logger-grid {
@@ -472,6 +484,10 @@ button {
   }
 
   .event-logger-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .session-action-grid {
     grid-template-columns: 1fr;
   }
 
