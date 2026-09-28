@@ -81,6 +81,7 @@ button {
 .sync-card,
 .notice-card,
 .data-source-card,
+.operations-card,
 .featured-card,
 .match-list-card,
 .timeline-card,
@@ -124,6 +125,7 @@ button {
 }
 
 .data-source-card,
+.operations-card,
 .status-card {
   margin-bottom: 20px;
   padding: 20px 24px;
@@ -142,6 +144,95 @@ button {
 .data-source-card strong {
   color: var(--gold);
   font-size: 2rem;
+}
+
+.operations-card {
+  display: grid;
+  gap: 18px;
+}
+
+.operations-card h2 {
+  margin: 0;
+}
+
+.operations-card p {
+  color: var(--muted);
+  margin-bottom: 0;
+}
+
+.operation-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.operation-grid label {
+  display: grid;
+  gap: 10px;
+}
+
+.operation-grid label > span {
+  color: var(--gold);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.operation-grid input {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(247, 242, 223, 0.1);
+  color: var(--cream);
+  font: inherit;
+  padding: 14px 16px;
+  width: 100%;
+}
+
+.operation-grid input::placeholder {
+  color: rgba(247, 242, 223, 0.42);
+}
+
+.operation-grid input:focus {
+  border-color: rgba(247, 201, 72, 0.7);
+  box-shadow: 0 0 0 4px rgba(247, 201, 72, 0.12);
+  outline: none;
+}
+
+.operation-grid input:disabled {
+  opacity: 0.52;
+}
+
+.operation-grid button {
+  border: 1px solid rgba(247, 201, 72, 0.72);
+  border-radius: 999px;
+  background: rgba(247, 201, 72, 0.15);
+  color: var(--cream);
+  cursor: pointer;
+  font-weight: 900;
+  padding: 12px 16px;
+}
+
+.operation-grid button:hover:not(:disabled),
+.operation-grid button:focus-visible:not(:disabled) {
+  background: rgba(247, 201, 72, 0.28);
+  outline: none;
+}
+
+.operation-grid button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.operation-note {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 12px 14px;
+}
+
+.operation-note.error {
+  border-color: rgba(255, 107, 107, 0.56);
+  color: #ffb4b4;
 }
 
 .status-card.error {
@@ -326,6 +417,10 @@ button {
   .data-source-card {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .operation-grid {
+    grid-template-columns: 1fr;
   }
 
   .timeline-event,

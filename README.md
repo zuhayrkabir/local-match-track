@@ -11,7 +11,7 @@ The app idea is intentionally concrete: referees, assistant referees, spectators
 | `flutter/` | Flutter Android, iOS, and Web | Primary/reference implementation with the most complete UI and demo workflow. |
 | `kotlin-android/` | Native Android/Kotlin | Native Android checkpoint using the Kotlin SDK and Android Ditto Tools. |
 | `swift-ios/` | Native iOS/SwiftUI | Native iOS checkpoint using DittoSwift and DittoSwiftTools. |
-| `react-web/` | React Web | Browser dashboard checkpoint with sample-data mode and optional demo-only Ditto Server read mode. |
+| `react-web/` | React Web | Browser dashboard checkpoint with sample-data mode and optional demo-only Ditto Server mode for synced reads plus basic match writes. |
 | `docs/` | Shared docs | Feature notes, architecture notes, and progress tracking from the original Flutter build. |
 
 ## Shared Ditto data model
@@ -41,7 +41,7 @@ user action
 | Flutter | Most complete implementation: dashboard, match detail, role workflows, assistant proposals, substitutions, rosters, web dashboard, and Flutter Ditto Tools entry point. |
 | Kotlin Android | Functional native Android implementation with dashboard/detail views, referee workflow, assistant proposals, spectator restrictions, timer, and Android Ditto Tools. |
 | Swift iOS | Functional native iOS implementation with dashboard/detail views, referee workflow, assistant proposals, participant heartbeat, substitutions, rosters, and native Ditto Tools. |
-| React Web | Vite + React + TypeScript dashboard UI with shared match projection, sample-data mode, and optional demo-only Ditto Server reads for `matches` and `match_events`. |
+| React Web | Vite + React + TypeScript dashboard UI with shared match projection, sample-data mode, and optional demo-only Ditto Server reads/writes for `matches` plus reads for `match_events`. |
 
 ## Credentials
 
@@ -128,10 +128,11 @@ npm install
 npm run dev
 ```
 
-React Web starts in sample-data mode. To try read-only Ditto Server mode, add
+React Web starts in sample-data mode. To try demo Ditto Server mode, add
 `VITE_DEMO_DITTO_DATABASE_ID`, `VITE_DEMO_DITTO_SERVER_URL`, and
 `VITE_DEMO_DITTO_PLAYGROUND_TOKEN` to the repo-root `.env` with a disposable
-development token.
+development token. In demo mode, React Web can create matches and rename the
+selected match; referee event logging remains mobile-first for now.
 
 ## Validation without physical devices
 
@@ -148,7 +149,7 @@ Physical devices are still required before claiming Bluetooth, LAN, peer-to-peer
 
 ## Known limitations
 
-- React Web's Ditto Server mode is demo-only and read-only; production browser auth still needs a token-exchange/proxy design.
+- React Web's Ditto Server mode is demo-only and currently limited to dashboard reads plus create/rename match writes; production browser auth still needs a token-exchange/proxy design.
 - Flutter remains the hero UI; Kotlin and Swift are native SDK checkpoints with similar workflows but less visual polish.
 - Assistant/referee role authorization is demo-level UI logic, not hardened production auth.
 - Duplicate event detection and conflict test harnesses are not implemented yet.

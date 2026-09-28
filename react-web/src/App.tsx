@@ -1,5 +1,10 @@
 import { useMemo, useState } from 'react'
-import { DittoProvider, useQuery, useRemotePeers } from '@dittolive/react-ditto'
+import {
+  DittoProvider,
+  useDitto,
+  useQuery,
+  useRemotePeers,
+} from '@dittolive/react-ditto'
 import {
   buildSummaries,
   clockLabel,
@@ -152,14 +157,86 @@ function ConnectedDashboard() {
           tone="error"
         />
       )}
-      <Dashboard
-        summaries={summaries}
+      <DittoBackedDashboard
+        isLoading={matchesQuery.isLoading || eventsQuery.isLoading}
         peerCount={remotePeers.length}
-        sourceLabel={
-          matchesQuery.isLoading || eventsQuery.isLoading ? 'Loading' : 'Ditto'
-        }
+        summaries={summaries}
       />
     </>
+  )
+}
+
+function DittoBackedDashboard({
+  summaries,
+  peerCount,
+  isLoading,
+}: {
+  summaries: MatchSummary[]
+  peerCount: number
+  isLoading: boolean
+}) {
+  const { ditto } = useDitto(null)
+  const [writeStatus, setWriteStatus] = useState<string>()
+  const [writeError, setWriteError] = useState<string>()
+
+  async function createMatch(name: string) {
+    if (!ditto) return
+
+    setWriteStatus('Creating match…')
+    setWriteError(undefined)
+
+    try {
+      const now = Date.now()
+      const doc: MatchDocument = {
+        _id: crypto.randomUUID(),
+        name,
+        status: 'notStarted',
+        selectedHalf: 'first',
+        elapsedSeconds: 0,
+        createdAtMillis: now,
+        updatedAtMillis: now,
+      }
+
+      await ditto.store.execute(
+        'INSERT INTO matches DOCUMENTS (:doc) ON ID CONFLICT DO UPDATE',
+        { doc },
+      )
+      setWriteStatus(`Created ${name}.`)
+    } catch (error) {
+      setWriteStatus(undefined)
+      setWriteError(String(error))
+    }
+  }
+
+  async function renameMatch(matchId: string, name: string) {
+    if (!ditto) return
+
+    setWriteStatus('Renaming match…')
+    setWriteError(undefined)
+
+    try {
+      await ditto.store.execute(
+        'UPDATE matches SET name = :name, updatedAtMillis = :updatedAtMillis WHERE _id = :matchId',
+        { matchId, name, updatedAtMillis: Date.now() },
+      )
+      setWriteStatus(`Renamed match to ${name}.`)
+    } catch (error) {
+      setWriteStatus(undefined)
+      setWriteError(String(error))
+    }
+  }
+
+  return (
+    <Dashboard
+      canWrite
+      onCreateMatch={createMatch}
+      onRenameMatch={renameMatch}
+      peerCount={peerCount}
+      sourceLabel={isLoading ? 'Loading' : 'Ditto'}
+      summaries={summaries}
+      writeError={writeError}
+      writeStatus={writeStatus}
+    />
   )
 }
 
@@ -167,10 +244,20 @@ function Dashboard({
   summaries,
   peerCount,
   sourceLabel,
+  canWrite = false,
+  onCreateMatch,
+  onRenameMatch,
+  writeStatus,
+  writeError,
 }: {
   summaries: MatchSummary[]
   peerCount: number
   sourceLabel: string
+  canWrite?: boolean
+  onCreateMatch?: (name: string) => Promise<void>
+  onRenameMatch?: (matchId: string, name: string) => Promise<void>
+  writeStatus?: string
+  writeError?: string
 }) {
   const [selectedMatchId, setSelectedMatchId] = useState<string | undefined>()
   const selectedMatch =
@@ -184,6 +271,14 @@ function Dashboard({
         <strong>{summaries.length}</strong>
         <span>matches · {peerCount} remote peers</span>
       </section>
+      <MatchOperations
+        canWrite={canWrite}
+        onCreateMatch={onCreateMatch}
+        onRenameMatch={onRenameMatch}
+        selectedMatch={selectedMatch}
+        writeError={writeError}
+        writeStatus={writeStatus}
+      />
       <section className="dashboard-grid">
         <FeaturedMatch summary={selectedMatch} />
         <MatchGrid
@@ -195,6 +290,113 @@ function Dashboard({
 
       <Timeline summary={selectedMatch} />
     </>
+  )
+}
+
+function MatchOperations({
+  canWrite,
+  selectedMatch,
+  onCreateMatch,
+  onRenameMatch,
+  writeStatus,
+  writeError,
+}: {
+  canWrite: boolean
+  selectedMatch?: MatchSummary
+  onCreateMatch?: (name: string) => Promise<void>
+  onRenameMatch?: (matchId: string, name: string) => Promise<void>
+  writeStatus?: string
+  writeError?: string
+}) {
+  const [newMatchName, setNewMatchName] = useState('')
+  const [renameValue, setRenameValue] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+
+  const currentName = selectedMatch?.match.name ?? ''
+  const renameDraft = renameValue || currentName
+
+  async function handleCreate() {
+    const trimmedName =
+      newMatchName.trim() ||
+      `React Web Match ${new Date().toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      })}`
+
+    if (!onCreateMatch) return
+    setIsSaving(true)
+    try {
+      await onCreateMatch(trimmedName)
+      setNewMatchName('')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function handleRename() {
+    const trimmedName = renameDraft.trim()
+    if (!selectedMatch || !onRenameMatch || !trimmedName) return
+
+    setIsSaving(true)
+    try {
+      await onRenameMatch(selectedMatch.match._id, trimmedName)
+      setRenameValue('')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <section className="operations-card">
+      <div>
+        <p className="eyebrow">Match operations</p>
+        <h2>Demo writes</h2>
+        <p>
+          Create or rename matches from the browser. These writes go into the
+          local Ditto Web store first, then sync through Ditto Server to the
+          mobile apps.
+        </p>
+      </div>
+
+      <div className="operation-grid">
+        <label>
+          <span>New match</span>
+          <input
+            disabled={!canWrite || isSaving}
+            onChange={(event) => setNewMatchName(event.target.value)}
+            placeholder="Saturday Final"
+            value={newMatchName}
+          />
+          <button disabled={!canWrite || isSaving} onClick={handleCreate}>
+            Create match
+          </button>
+        </label>
+
+        <label>
+          <span>Selected match name</span>
+          <input
+            disabled={!canWrite || isSaving || !selectedMatch}
+            onChange={(event) => setRenameValue(event.target.value)}
+            placeholder={currentName || 'Select a match'}
+            value={renameValue}
+          />
+          <button
+            disabled={!canWrite || isSaving || !selectedMatch}
+            onClick={handleRename}
+          >
+            Rename selected
+          </button>
+        </label>
+      </div>
+
+      {!canWrite && (
+        <p className="operation-note">
+          Switch to Demo Ditto Server mode to enable browser writes.
+        </p>
+      )}
+      {writeStatus && <p className="operation-note">{writeStatus}</p>}
+      {writeError && <p className="operation-note error">{writeError}</p>}
+    </section>
   )
 }
 
