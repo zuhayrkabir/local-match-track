@@ -11,7 +11,7 @@ The app idea is intentionally concrete: referees, assistant referees, spectators
 | `flutter/` | Flutter Android, iOS, and Web | Primary/reference implementation with the most complete UI and demo workflow. |
 | `kotlin-android/` | Native Android/Kotlin | Native Android checkpoint using the Kotlin SDK and Android Ditto Tools. |
 | `swift-ios/` | Native iOS/SwiftUI | Native iOS checkpoint using DittoSwift and DittoSwiftTools. |
-| `react-web/` | React Web | Browser dashboard checkpoint. Currently scaffolded with shared projection logic and sample data while the browser auth strategy is decided. |
+| `react-web/` | React Web | Browser dashboard checkpoint with sample-data mode and optional demo-only Ditto Server read mode. |
 | `docs/` | Shared docs | Feature notes, architecture notes, and progress tracking from the original Flutter build. |
 
 ## Shared Ditto data model
@@ -41,7 +41,7 @@ user action
 | Flutter | Most complete implementation: dashboard, match detail, role workflows, assistant proposals, substitutions, rosters, web dashboard, and Flutter Ditto Tools entry point. |
 | Kotlin Android | Functional native Android implementation with dashboard/detail views, referee workflow, assistant proposals, spectator restrictions, timer, and Android Ditto Tools. |
 | Swift iOS | Functional native iOS implementation with dashboard/detail views, referee workflow, assistant proposals, participant heartbeat, substitutions, rosters, and native Ditto Tools. |
-| React Web | Initial safe scaffold: Vite + React + TypeScript dashboard UI and shared match projection over sample data. Real Ditto Web reads are deferred until browser auth/token exposure is explicitly decided. |
+| React Web | Vite + React + TypeScript dashboard UI with shared match projection, sample-data mode, and optional demo-only Ditto Server reads for `matches` and `match_events`. |
 
 ## Credentials
 
@@ -57,7 +57,7 @@ DITTO_PLAYGROUND_TOKEN
 
 Swift reads these from a repo-level `.env` file generated from `swift-ios/.env.sample`. Flutter receives them through `--dart-define`. Kotlin receives them through Gradle `-P...` properties.
 
-React Web currently does not consume credentials. Browser JavaScript is inspectable, so directly bundling `DITTO_PLAYGROUND_TOKEN` would expose the token to anyone who can load the web app. Choose a demo-only direct-token approach or a safer token-exchange/proxy approach before wiring React to Ditto Server.
+React Web can optionally consume explicitly demo-scoped `VITE_DEMO_DITTO_*` credentials. Browser JavaScript is inspectable, so only use a disposable development token for that mode. A production browser app should use a safer token-exchange/proxy approach.
 
 ## Run Flutter
 
@@ -128,8 +128,10 @@ npm install
 npm run dev
 ```
 
-This first checkpoint uses sample data only. It proves the React dashboard shell
-and shared match projection without risking browser-side credential exposure.
+React Web starts in sample-data mode. To try read-only Ditto Server mode, add
+`VITE_DEMO_DITTO_DATABASE_ID`, `VITE_DEMO_DITTO_SERVER_URL`, and
+`VITE_DEMO_DITTO_PLAYGROUND_TOKEN` to the repo-root `.env` with a disposable
+development token.
 
 ## Validation without physical devices
 
@@ -146,7 +148,7 @@ Physical devices are still required before claiming Bluetooth, LAN, peer-to-peer
 
 ## Known limitations
 
-- React Web is scaffolded but does not read from Ditto yet; browser-safe authentication still needs to be chosen.
+- React Web's Ditto Server mode is demo-only and read-only; production browser auth still needs a token-exchange/proxy design.
 - Flutter remains the hero UI; Kotlin and Swift are native SDK checkpoints with similar workflows but less visual polish.
 - Assistant/referee role authorization is demo-level UI logic, not hardened production auth.
 - Duplicate event detection and conflict test harnesses are not implemented yet.

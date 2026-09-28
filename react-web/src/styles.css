@@ -80,9 +80,11 @@ button {
 
 .sync-card,
 .notice-card,
+.data-source-card,
 .featured-card,
 .match-list-card,
-.timeline-card {
+.timeline-card,
+.status-card {
   border: 1px solid var(--border);
   border-radius: 28px;
   background: var(--panel);
@@ -90,8 +92,64 @@ button {
 }
 
 .notice-card {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
   margin-bottom: 20px;
   padding: 22px 26px;
+}
+
+.mode-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.mode-button {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-soft);
+  color: var(--cream);
+  cursor: pointer;
+  padding: 10px 14px;
+}
+
+.mode-button.active,
+.mode-button:hover,
+.mode-button:focus-visible {
+  background: rgba(247, 201, 72, 0.14);
+  border-color: rgba(247, 201, 72, 0.7);
+  outline: none;
+}
+
+.data-source-card,
+.status-card {
+  margin-bottom: 20px;
+  padding: 20px 24px;
+}
+
+.data-source-card {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+}
+
+.data-source-card span {
+  color: var(--muted);
+}
+
+.data-source-card strong {
+  color: var(--gold);
+  font-size: 2rem;
+}
+
+.status-card.error {
+  border-color: rgba(255, 107, 107, 0.56);
+}
+
+.status-card p {
+  color: var(--muted);
 }
 
 .sync-card {
@@ -262,6 +320,12 @@ button {
   .hero,
   .dashboard-grid {
     grid-template-columns: 1fr;
+  }
+
+  .notice-card,
+  .data-source-card {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .timeline-event,

@@ -4,14 +4,15 @@ This folder is the React Web checkpoint for the Local-First Match Tracker monore
 
 ## Current checkpoint
 
-This first pass is intentionally safe and read-only:
+This pass has two modes:
 
 - Vite + React + TypeScript app scaffolded in `react-web/`;
 - dashboard UI mirrors the Flutter broadcast-style theme;
 - shared match projection code understands the same `matches` and `match_events` document fields;
-- sample data proves the dashboard, score, and timeline layout before Ditto Web auth is added.
+- sample data proves the dashboard, score, and timeline layout without opening Ditto;
+- optional demo Ditto Server mode opens a browser Ditto peer and reads real `matches` / `match_events`.
 
-It does **not** bundle a Ditto playground token into browser JavaScript.
+Demo Ditto Server mode is read-only in the UI. It does **not** create matches or write referee events.
 
 ## Why React Web only?
 
@@ -27,6 +28,22 @@ npm run dev
 
 Open the printed localhost URL.
 
+## Optional demo Ditto Server mode
+
+Browser JavaScript is inspectable. Only use a disposable development/playground
+token here, and do not deploy this mode publicly.
+
+Create or update the repo-root `.env` file with explicitly demo-scoped Vite
+variables:
+
+```bash
+VITE_DEMO_DITTO_DATABASE_ID="your-database-id"
+VITE_DEMO_DITTO_SERVER_URL="https://your-ditto-server-url"
+VITE_DEMO_DITTO_PLAYGROUND_TOKEN="your-disposable-development-token"
+```
+
+Then run `npm run dev` and select **Demo Ditto Server** in the app.
+
 ## Validate
 
 ```bash
@@ -35,14 +52,8 @@ npm run typecheck
 npm run build
 ```
 
-## Ditto Web wiring plan
+## Production auth note
 
-The next checkpoint is to replace `sampleData.ts` with real Ditto Web reads.
-
-Before doing that, choose an auth strategy:
-
-1. **Demo-only direct token**: fastest, but exposes `DITTO_PLAYGROUND_TOKEN` in the browser bundle.
-2. **Safer token exchange/proxy**: better architecture, but requires a tiny backend or auth endpoint.
-3. **Small-peers-only browser checkpoint**: avoids server auth but will not sync with the existing Ditto Server data.
-
-Until that decision is explicit, this folder avoids committing browser-side token wiring.
+The demo mode intentionally favors speed over security. A production browser app
+should use a backend/token-exchange flow so the long-lived playground token is
+not shipped to the browser.

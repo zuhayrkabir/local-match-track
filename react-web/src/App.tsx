@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { DittoProvider, useQuery, useRemotePeers } from '@dittolive/react-ditto'
 import {
   buildSummaries,
   clockLabel,
@@ -6,48 +7,183 @@ import {
   eventSubject,
   minuteLabel,
 } from './domain/matchProjection'
-import type { MatchSummary } from './domain/matchTypes'
+import type {
+  MatchDocument,
+  MatchEventDocument,
+  MatchSummary,
+} from './domain/matchTypes'
 import { sampleEvents, sampleMatches } from './sampleData'
+import { createDemoDitto } from './services/createDemoDitto'
+
+type AppMode = 'sample' | 'ditto'
 
 export default function App() {
+  const [mode, setMode] = useState<AppMode>('sample')
+
+  return (
+    <main className="app-shell">
+      <AppHeader mode={mode} onModeChange={setMode} />
+
+      {mode === 'ditto' ? (
+        <DittoProvider setup={createDemoDitto}>
+          {({ loading, error }) => {
+            if (loading) {
+              return (
+                <StatusCard
+                  eyebrow="Ditto Web"
+                  title="Opening browser peer…"
+                  copy="React is opening a Ditto Web instance, authenticating to the demo Ditto Server, and preparing read-only queries."
+                />
+              )
+            }
+
+            if (error) {
+              return (
+                <StatusCard
+                  eyebrow="Ditto setup failed"
+                  title="Could not connect React Web to Ditto."
+                  copy={String(error)}
+                  tone="error"
+                />
+              )
+            }
+
+            return <ConnectedDashboard />
+          }}
+        </DittoProvider>
+      ) : (
+        <SampleDashboard />
+      )}
+    </main>
+  )
+}
+
+function AppHeader({
+  mode,
+  onModeChange,
+}: {
+  mode: AppMode
+  onModeChange: (mode: AppMode) => void
+}) {
+  return (
+    <>
+      <header className="hero">
+        <div>
+          <p className="eyebrow">React Web checkpoint</p>
+          <h1>Local-First Match Center</h1>
+          <p>
+            Browser dashboard for the same soccer match data model used by
+            Flutter, Kotlin, and Swift.
+          </p>
+        </div>
+        <div className="sync-card">
+          <span>Mode</span>
+          <strong>{mode === 'sample' ? 'Safe' : 'Demo'}</strong>
+          <small>
+            {mode === 'sample'
+              ? 'sample data only'
+              : 'Ditto Server read-only'}
+          </small>
+        </div>
+      </header>
+
+      <section className="notice-card">
+        <div>
+          <p className="eyebrow">Connection mode</p>
+          <p>
+            Sample mode never opens Ditto. Demo Ditto mode reads real synced
+            data, but browser JavaScript can expose demo tokens, so only use a
+            disposable development token.
+          </p>
+        </div>
+        <div className="mode-actions">
+          <button
+            className={mode === 'sample' ? 'mode-button active' : 'mode-button'}
+            onClick={() => onModeChange('sample')}
+            type="button"
+          >
+            Sample data
+          </button>
+          <button
+            className={mode === 'ditto' ? 'mode-button active' : 'mode-button'}
+            onClick={() => onModeChange('ditto')}
+            type="button"
+          >
+            Demo Ditto Server
+          </button>
+        </div>
+      </section>
+    </>
+  )
+}
+
+function SampleDashboard() {
   const summaries = useMemo(
     () => buildSummaries(sampleMatches, sampleEvents),
     [],
   )
 
+  return <Dashboard summaries={summaries} peerCount={0} sourceLabel="Sample" />
+}
+
+function ConnectedDashboard() {
+  const matchesQuery = useQuery<MatchDocument>('SELECT * FROM matches')
+  const eventsQuery = useQuery<MatchEventDocument>('SELECT * FROM match_events')
+  const { remotePeers } = useRemotePeers()
+
+  const summaries = useMemo(
+    () =>
+      buildSummaries(
+        matchesQuery.items.map((item) => item.value),
+        eventsQuery.items.map((item) => item.value),
+      ),
+    [matchesQuery.items, eventsQuery.items],
+  )
+
+  const error = matchesQuery.error ?? eventsQuery.error
+
+  return (
+    <>
+      {error && (
+        <StatusCard
+          eyebrow="Query error"
+          title="Ditto query failed."
+          copy={String(error)}
+          tone="error"
+        />
+      )}
+      <Dashboard
+        summaries={summaries}
+        peerCount={remotePeers.length}
+        sourceLabel={
+          matchesQuery.isLoading || eventsQuery.isLoading ? 'Loading' : 'Ditto'
+        }
+      />
+    </>
+  )
+}
+
+function Dashboard({
+  summaries,
+  peerCount,
+  sourceLabel,
+}: {
+  summaries: MatchSummary[]
+  peerCount: number
+  sourceLabel: string
+}) {
   const [selectedMatchId, setSelectedMatchId] = useState<string | undefined>()
   const selectedMatch =
     summaries.find((summary) => summary.match._id === selectedMatchId) ??
     summaries[0]
 
   return (
-    <main className="app-shell">
-      <header className="hero">
-        <div>
-          <p className="eyebrow">React Web checkpoint</p>
-          <h1>Local-First Match Center</h1>
-          <p>
-            This first browser checkpoint mirrors the Flutter dashboard UI and
-            shared match projection without exposing a Ditto playground token in
-            client-side JavaScript.
-          </p>
-        </div>
-        <div className="sync-card">
-          <span>Status</span>
-          <strong>Safe</strong>
-          <small>UI scaffold, no browser token yet</small>
-        </div>
-      </header>
-
-      <section className="notice-card">
-        <p className="eyebrow">Ditto Web next step</p>
-        <p>
-          The browser app is ready for Ditto Web wiring, but server auth needs a
-          deliberate demo/security decision because any token bundled into React
-          can be inspected by users.
-        </p>
+    <>
+      <section className="data-source-card">
+        <span>{sourceLabel} source</span>
+        <strong>{summaries.length}</strong>
+        <span>matches · {peerCount} remote peers</span>
       </section>
-
       <section className="dashboard-grid">
         <FeaturedMatch summary={selectedMatch} />
         <MatchGrid
@@ -58,7 +194,27 @@ export default function App() {
       </section>
 
       <Timeline summary={selectedMatch} />
-    </main>
+    </>
+  )
+}
+
+function StatusCard({
+  eyebrow,
+  title,
+  copy,
+  tone,
+}: {
+  eyebrow: string
+  title: string
+  copy: string
+  tone?: 'error'
+}) {
+  return (
+    <section className={tone === 'error' ? 'status-card error' : 'status-card'}>
+      <p className="eyebrow">{eyebrow}</p>
+      <h2>{title}</h2>
+      <p>{copy}</p>
+    </section>
   )
 }
 
